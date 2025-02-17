@@ -29,7 +29,7 @@ public partial class Product
 
     public virtual Branch ProductBrand { get; set; }
 
-    public virtual ProductType ProductType { get; set; }
+    public virtual ICollection<ProductSkinType> ProductSkinTypes { get; set; } = new List<ProductSkinType>();
 
-    public virtual ICollection<SkinType> SkinTypes { get; set; } = new List<SkinType>();
+    public virtual ProductType ProductType { get; set; }
 }
