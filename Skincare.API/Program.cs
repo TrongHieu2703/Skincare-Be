@@ -1,6 +1,10 @@
 ﻿
 using Microsoft.EntityFrameworkCore;
 using Skincare.Repositories.Context;
+using Skincare.Repositories.Implements;
+using Skincare.Repositories.Interfaces;
+using Skincare.Services.Implements;
+using Skincare.Services.Interfaces;
 
 namespace Skincare.API
 {
@@ -14,6 +18,10 @@ namespace Skincare.API
             //Add dbcontext
             builder.Services.AddDbContext<SWP391Context>(options =>
              options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+            // Đăng ký Repository & Service
+            builder.Services.AddScoped<IAccountRepository,AccountRepository>();
+            builder.Services.AddScoped<IAccountService, AccountService>();
 
             builder.Services.AddControllers();
             // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle

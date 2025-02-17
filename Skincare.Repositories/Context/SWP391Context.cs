@@ -41,6 +41,8 @@ public partial class SWP391Context : DbContext
 
     public virtual DbSet<Product> Products { get; set; }
 
+    public virtual DbSet<ProductSkinType> ProductSkinTypes { get; set; }
+
     public virtual DbSet<ProductType> ProductTypes { get; set; }
 
     public virtual DbSet<Qa> Qas { get; set; }
@@ -74,7 +76,7 @@ public partial class SWP391Context : DbContext
 
     //    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     //#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-    //        => optionsBuilder.UseSqlServer("Data Source=(local);Initial Catalog=SWP391;Persist Security Info=True;User ID=sa;Password=123456");
+    //        => optionsBuilder.UseSqlServer("Data Source=(local);Initial Catalog=SWP391;Persist Security Info=True;User ID=sa;Password=123456;Encrypt=True");
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -102,11 +104,10 @@ public partial class SWP391Context : DbContext
                 .HasMaxLength(255)
                 .IsUnicode(false)
                 .HasColumnName("email");
-            entity.Property(e => e.Password)
+            entity.Property(e => e.PasswordHash)
                 .IsRequired()
                 .HasMaxLength(255)
-                .IsUnicode(false)
-                .HasColumnName("password");
+                .HasColumnName("password_hash");
             entity.Property(e => e.PhoneNumber)
                 .HasMaxLength(15)
                 .IsUnicode(false)
@@ -376,25 +377,27 @@ public partial class SWP391Context : DbContext
                 .HasForeignKey(d => d.ProductTypeId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__Product__product__4CA06362");
+        });
 
-            entity.HasMany(d => d.SkinTypes).WithMany(p => p.Products)
-                .UsingEntity<Dictionary<string, object>>(
-                    "ProductSkinType",
-                    r => r.HasOne<SkinType>().WithMany()
-                        .HasForeignKey("SkinTypeId")
-                        .OnDelete(DeleteBehavior.ClientSetNull)
-                        .HasConstraintName("FK__ProductSk__skin___49C3F6B7"),
-                    l => l.HasOne<Product>().WithMany()
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.ClientSetNull)
-                        .HasConstraintName("FK__ProductSk__produ__48CFD27E"),
-                    j =>
-                    {
-                        j.HasKey("ProductId", "SkinTypeId").HasName("PK__ProductS__A552CADF3A0A5004");
-                        j.ToTable("ProductSkinType");
-                        j.IndexerProperty<int>("ProductId").HasColumnName("product_id");
-                        j.IndexerProperty<int>("SkinTypeId").HasColumnName("skin_type_id");
-                    });
+        modelBuilder.Entity<ProductSkinType>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__ProductS__3213E83F77DB3203");
+
+            entity.ToTable("ProductSkinType");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.ProductId).HasColumnName("product_id");
+            entity.Property(e => e.SkinTypeId).HasColumnName("skin_type_id");
+
+            entity.HasOne(d => d.Product).WithMany(p => p.ProductSkinTypes)
+                .HasForeignKey(d => d.ProductId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK__ProductSk__produ__48CFD27E");
+
+            entity.HasOne(d => d.SkinType).WithMany(p => p.ProductSkinTypes)
+                .HasForeignKey(d => d.SkinTypeId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK__ProductSk__skin___49C3F6B7");
         });
 
         modelBuilder.Entity<ProductType>(entity =>
