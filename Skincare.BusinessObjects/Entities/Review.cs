@@ -22,4 +22,5 @@ public partial class Review
     public virtual Account Customer { get; set; }
 
     public virtual OrderItem OrderDetail { get; set; }
+    public int ProductId { get; set; }
 }

@@ -1,12 +1,16 @@
-﻿using System;
+﻿using Skincare.BusinessObjects.Entities;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace Skincare.Repositories.Interfaces
 {
-    internal class IProductRepository
+    public interface IProductRepository
     {
+        Task<IEnumerable<Product>> GetAllProductsAsync();
+        Task<Product> GetProductByIdAsync(int id);
+        Task<IEnumerable<Product>> GetByTypeAsync(int productTypeId);
+        Task<Product> CreateProductAsync(Product product);
+        Task UpdateProductAsync(Product product);
+        Task DeleteProductAsync(int id);
     }
 }

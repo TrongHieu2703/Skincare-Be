@@ -1,14 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Identity.Data;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Mvc;
 using Skincare.BusinessObjects.Entities;
-using Skincare.Repositories.Context;
 using Skincare.Services.Interfaces;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace Skincare.API.Controllers
 {
@@ -23,101 +17,56 @@ namespace Skincare.API.Controllers
             _accountService = accountService;
         }
 
-        // POST: api/Account
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        [HttpPost]
-        public async Task<ActionResult<Account>> Login([FromBody] Skincare.Services.Dtos.Request.LoginRequest request)
+        [HttpGet]
+        public async Task<IActionResult> GetAllAccounts()
         {
-            if (request == null)
-            {
-                return BadRequest();
-            }
-            var response = await _accountService.LoginAsync(request);
-            return Ok(response);
+            var accounts = await _accountService.GetAllAccountsAsync();
+            return Ok(accounts);
         }
 
-        // GET: api/Account
-        //[HttpGet]
-        //public async Task<ActionResult<IEnumerable<Account>>> GetAccounts()
-        //{
-        //    return await _context.Accounts.ToListAsync();
-        //}
+        [HttpGet("{id}")]
+        public async Task<IActionResult> GetAccountById(int id)
+        {
+            var account = await _accountService.GetAccountByIdAsync(id);
+            if (account == null)
+                return NotFound();
+            return Ok(account);
+        }
 
-        //// GET: api/Account/5
-        //[HttpGet("{id}")]
-        //public async Task<ActionResult<Account>> GetAccount(int id)
-        //{
-        //    var account = await _context.Accounts.FindAsync(id);
+        [HttpGet("by-email/{email}")]
+        public async Task<IActionResult> GetByEmail(string email)
+        {
+            var account = await _accountService.GetByEmailAsync(email);
+            if (account == null)
+                return NotFound();
+            return Ok(account);
+        }
 
-        //    if (account == null)
-        //    {
-        //        return NotFound();
-        //    }
+        [HttpPost]
+        public async Task<IActionResult> CreateAccount([FromBody] Account account)
+        {
+            if (account == null)
+                return BadRequest();
 
-        //    return account;
-        //}
+            var createdAccount = await _accountService.CreateAccountAsync(account);
+            return CreatedAtAction(nameof(GetAccountById), new { id = createdAccount.Id }, createdAccount);
+        }
 
-        //// PUT: api/Account/5
-        //// To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        //[HttpPut("{id}")]
-        //public async Task<IActionResult> PutAccount(int id, Account account)
-        //{
-        //    if (id != account.Id)
-        //    {
-        //        return BadRequest();
-        //    }
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateAccount(int id, [FromBody] Account account)
+        {
+            if (account == null || account.Id != id)
+                return BadRequest();
 
-        //    _context.Entry(account).State = EntityState.Modified;
+            await _accountService.UpdateAccountAsync(account);
+            return NoContent();
+        }
 
-        //    try
-        //    {
-        //        await _context.SaveChangesAsync();
-        //    }
-        //    catch (DbUpdateConcurrencyException)
-        //    {
-        //        if (!AccountExists(id))
-        //        {
-        //            return NotFound();
-        //        }
-        //        else
-        //        {
-        //            throw;
-        //        }
-        //    }
-
-        //    return NoContent();
-        //}
-
-        //// POST: api/Account
-        //// To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        //[HttpPost]
-        //public async Task<ActionResult<Account>> PostAccount(Account account)
-        //{
-        //    _context.Accounts.Add(account);
-        //    await _context.SaveChangesAsync();
-
-        //    return CreatedAtAction("GetAccount", new { id = account.Id }, account);
-        //}
-
-        //// DELETE: api/Account/5
-        //[HttpDelete("{id}")]
-        //public async Task<IActionResult> DeleteAccount(int id)
-        //{
-        //    var account = await _context.Accounts.FindAsync(id);
-        //    if (account == null)
-        //    {
-        //        return NotFound();
-        //    }
-
-        //    _context.Accounts.Remove(account);
-        //    await _context.SaveChangesAsync();
-
-        //    return NoContent();
-        //}
-
-        //private bool AccountExists(int id)
-        //{
-        //    return _context.Accounts.Any(e => e.Id == id);
-        //}
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteAccount(int id)
+        {
+            await _accountService.DeleteAccountAsync(id);
+            return NoContent();
+        }
     }
 }

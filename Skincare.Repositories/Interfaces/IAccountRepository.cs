@@ -1,16 +1,16 @@
-﻿using System;
+﻿using Skincare.BusinessObjects.Entities;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
-using Skincare.BusinessObjects.Entities;
 
 namespace Skincare.Repositories.Interfaces
 {
     public interface IAccountRepository
     {
-        Task<Account?> GetByEmailAsync(string email);
-        Task AddAccountAsync(Account account);
-        Task SaveChangesAsync();
+        Task<IEnumerable<Account>> GetAllAccountsAsync();
+        Task<Account> GetAccountByIdAsync(int id);
+        Task<Account> GetByEmailAsync(string email);
+        Task<Account> CreateAccountAsync(Account account);
+        Task UpdateAccountAsync(Account account);
+        Task DeleteAccountAsync(int id);
     }
 }

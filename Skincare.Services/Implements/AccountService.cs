@@ -1,11 +1,7 @@
-﻿using Skincare.Repositories.Interfaces;
-using Skincare.Services.Dtos.Request;
-using Skincare.Services.Dtos.Response;
+﻿using Skincare.BusinessObjects.Entities;
+using Skincare.Repositories.Interfaces;
 using Skincare.Services.Interfaces;
-using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace Skincare.Services.Implements
@@ -13,24 +9,40 @@ namespace Skincare.Services.Implements
     public class AccountService : IAccountService
     {
         private readonly IAccountRepository _accountRepository;
-        //private readonly IProductTypeRepository _repo;
 
         public AccountService(IAccountRepository accountRepository)
         {
             _accountRepository = accountRepository;
         }
 
-        //public AccountService(IAccountRepository accountRepository, IProductTypeRepository repo)
-        //{
-        //    _accountRepository = accountRepository;
-        //    _repo = repo
-        //}
-
-        public async Task<LoginResponse> LoginAsync(LoginRequest request)
+        public async Task<IEnumerable<Account>> GetAllAccountsAsync()
         {
-            var response = new LoginResponse { Token = "đâsdasdasdasd", Email = "Hieu@gmail.com" };
-            await Task.Delay(1000);
-            return response;
+            return await _accountRepository.GetAllAccountsAsync();
+        }
+
+        public async Task<Account> GetAccountByIdAsync(int id)
+        {
+            return await _accountRepository.GetAccountByIdAsync(id);
+        }
+
+        public async Task<Account> GetByEmailAsync(string email)
+        {
+            return await _accountRepository.GetByEmailAsync(email);
+        }
+
+        public async Task<Account> CreateAccountAsync(Account account)
+        {
+            return await _accountRepository.CreateAccountAsync(account);
+        }
+
+        public async Task UpdateAccountAsync(Account account)
+        {
+            await _accountRepository.UpdateAccountAsync(account);
+        }
+
+        public async Task DeleteAccountAsync(int id)
+        {
+            await _accountRepository.DeleteAccountAsync(id);
         }
     }
 }
