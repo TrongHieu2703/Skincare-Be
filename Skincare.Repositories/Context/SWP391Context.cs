@@ -5,8 +5,7 @@ using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Skincare.BusinessObjects.Entities;
 
-namespace Skincare.Repositories.Context
-    ;
+namespace Skincare.Repositories.Context;
 
 public partial class SWP391Context : DbContext
 {
