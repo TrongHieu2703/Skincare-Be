@@ -23,11 +23,13 @@ public partial class Order
 
     public DateTime? UpdatedAt { get; set; }
 
+    public decimal TotalAmount { get; set; }
+
     public virtual Account Customer { get; set; }
 
     public virtual ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
 
-    public virtual OrderStatus StatusNavigation { get; set; }
+    public virtual ICollection<Transaction> Transactions { get; set; } = new List<Transaction>();
 
     public virtual Voucher Voucher { get; set; }
 }

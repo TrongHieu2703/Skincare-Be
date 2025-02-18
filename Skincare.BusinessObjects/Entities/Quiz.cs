@@ -11,9 +11,9 @@ public partial class Quiz
 
     public string Question { get; set; }
 
-    public int TestId { get; set; }
+    public string Title { get; set; }
+
+    public virtual ICollection<CustomerTest> CustomerTests { get; set; } = new List<CustomerTest>();
 
     public virtual ICollection<QuizAnswer> QuizAnswers { get; set; } = new List<QuizAnswer>();
-
-    public virtual Test Test { get; set; }
 }

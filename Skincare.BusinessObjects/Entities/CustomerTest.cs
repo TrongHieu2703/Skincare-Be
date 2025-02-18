@@ -11,7 +11,7 @@ public partial class CustomerTest
 
     public int CustomerId { get; set; }
 
-    public int TestId { get; set; }
+    public int QuizId { get; set; }
 
     public DateTime? CreatedAt { get; set; }
 
@@ -19,5 +19,5 @@ public partial class CustomerTest
 
     public virtual Account Customer { get; set; }
 
-    public virtual Test Test { get; set; }
+    public virtual Quiz Quiz { get; set; }
 }

@@ -3,7 +3,7 @@
    "ContextClassName": "SWP391Context",
    "ContextNamespace": null,
    "FilterSchemas": false,
-   "IncludeConnectionString": true,
+   "IncludeConnectionString": false,
    "ModelNamespace": null,
    "OutputContextPath": null,
    "OutputPath": "Entities",
@@ -19,10 +19,6 @@
          "ObjectType": 0
       },
       {
-         "Name": "[dbo].[Account_Role]",
-         "ObjectType": 0
-      },
-      {
          "Name": "[dbo].[BlogCategory]",
          "ObjectType": 0
       },
@@ -35,7 +31,15 @@
          "ObjectType": 0
       },
       {
+         "Name": "[dbo].[Cart]",
+         "ObjectType": 0
+      },
+      {
          "Name": "[dbo].[CustomerTest]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[FAQ]",
          "ObjectType": 0
       },
       {
@@ -44,10 +48,6 @@
       },
       {
          "Name": "[dbo].[Order]",
-         "ObjectType": 0
-      },
-      {
-         "Name": "[dbo].[Order_Status]",
          "ObjectType": 0
       },
       {
@@ -64,10 +64,6 @@
       },
       {
          "Name": "[dbo].[ProductType]",
-         "ObjectType": 0
-      },
-      {
-         "Name": "[dbo].[QA]",
          "ObjectType": 0
       },
       {
@@ -91,7 +87,7 @@
          "ObjectType": 0
       },
       {
-         "Name": "[dbo].[Test]",
+         "Name": "[dbo].[Transaction]",
          "ObjectType": 0
       },
       {
