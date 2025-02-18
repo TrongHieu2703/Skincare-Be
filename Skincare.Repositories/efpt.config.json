@@ -6,7 +6,7 @@
    "IncludeConnectionString": false,
    "ModelNamespace": null,
    "OutputContextPath": null,
-   "OutputPath": "Models",
+   "OutputPath": "..\/..\/Skincare.BusinessObjects\/Entities",
    "PreserveCasingWithRegex": true,
    "ProjectRootNamespace": "Skincare.Repositories",
    "Schemas": null,
@@ -19,7 +19,79 @@
          "ObjectType": 0
       },
       {
+         "Name": "[dbo].[BlogCategory]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[BlogPost]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[Branch]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[Cart]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[CustomerTest]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[FAQ]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[Inventory]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[Order]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[OrderItem]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[Product]",
+         "ObjectType": 0
+      },
+      {
          "Name": "[dbo].[ProductSkinType]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[ProductType]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[Quiz]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[QuizAnswer]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[Review]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[SkinCareRoutine]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[SkinType]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[Transaction]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[Voucher]",
          "ObjectType": 0
       }
    ],

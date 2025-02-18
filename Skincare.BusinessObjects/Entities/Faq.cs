@@ -5,7 +5,7 @@ using System.Collections.Generic;
 
 namespace Skincare.BusinessObjects.Entities;
 
-public partial class Qa
+public partial class Faq
 {
     public int Id { get; set; }
 

@@ -3,17 +3,13 @@
 using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Skincare.BusinessObjects.Entities;
 
-namespace Skincare.Repositories.Context;
+namespace Skincare.Repositories.Context
+    ;
 
 public partial class SWP391Context : DbContext
 {
-    public SWP391Context()
-    {
-    }
-
     public SWP391Context(DbContextOptions<SWP391Context> options)
         : base(options)
     {
@@ -21,15 +17,17 @@ public partial class SWP391Context : DbContext
 
     public virtual DbSet<Account> Accounts { get; set; }
 
-    public virtual DbSet<AccountRole> AccountRoles { get; set; }
-
     public virtual DbSet<BlogCategory> BlogCategories { get; set; }
 
     public virtual DbSet<BlogPost> BlogPosts { get; set; }
 
     public virtual DbSet<Branch> Branches { get; set; }
 
+    public virtual DbSet<Cart> Carts { get; set; }
+
     public virtual DbSet<CustomerTest> CustomerTests { get; set; }
+
+    public virtual DbSet<Faq> Faqs { get; set; }
 
     public virtual DbSet<Inventory> Inventories { get; set; }
 
@@ -37,15 +35,11 @@ public partial class SWP391Context : DbContext
 
     public virtual DbSet<OrderItem> OrderItems { get; set; }
 
-    public virtual DbSet<OrderStatus> OrderStatuses { get; set; }
-
     public virtual DbSet<Product> Products { get; set; }
 
     public virtual DbSet<ProductSkinType> ProductSkinTypes { get; set; }
 
     public virtual DbSet<ProductType> ProductTypes { get; set; }
-
-    public virtual DbSet<Qa> Qas { get; set; }
 
     public virtual DbSet<Quiz> Quizzes { get; set; }
 
@@ -57,26 +51,9 @@ public partial class SWP391Context : DbContext
 
     public virtual DbSet<SkinType> SkinTypes { get; set; }
 
-    public virtual DbSet<Test> Tests { get; set; }
+    public virtual DbSet<Transaction> Transactions { get; set; }
 
     public virtual DbSet<Voucher> Vouchers { get; set; }
-
-    public static string GetConnectionString(string connectionStringName)
-    {
-        var config = new ConfigurationBuilder()
-            .SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
-            .AddJsonFile("appsettings.json")
-            .Build();
-
-        string connectionString = config.GetConnectionString(connectionStringName);
-        return connectionString;
-    }
-    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-        => optionsBuilder.UseSqlServer(GetConnectionString("DefaultConnection"));
-
-    //    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-    //#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-    //        => optionsBuilder.UseSqlServer("Data Source=(local);Initial Catalog=SWP391;Persist Security Info=True;User ID=sa;Password=123456;Encrypt=True");
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -85,6 +62,8 @@ public partial class SWP391Context : DbContext
             entity.HasKey(e => e.Id).HasName("PK__Account__3213E83F89716693");
 
             entity.ToTable("Account");
+
+            entity.HasIndex(e => e.Email, "IDX_Account_Email");
 
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.Address)
@@ -128,23 +107,6 @@ public partial class SWP391Context : DbContext
                 .HasMaxLength(255)
                 .IsUnicode(false)
                 .HasColumnName("username");
-
-            entity.HasOne(d => d.RoleNavigation).WithMany(p => p.Accounts)
-                .HasForeignKey(d => d.Role)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Account__role__403A8C7D");
-        });
-
-        modelBuilder.Entity<AccountRole>(entity =>
-        {
-            entity.HasKey(e => e.RoleName).HasName("PK__Account___783254B0F17CADCB");
-
-            entity.ToTable("Account_Role");
-
-            entity.Property(e => e.RoleName)
-                .HasMaxLength(50)
-                .IsUnicode(false)
-                .HasColumnName("role_name");
         });
 
         modelBuilder.Entity<BlogCategory>(entity =>
@@ -217,6 +179,30 @@ public partial class SWP391Context : DbContext
                 .HasColumnName("name");
         });
 
+        modelBuilder.Entity<Cart>(entity =>
+        {
+            entity.HasKey(e => e.CartId).HasName("PK__Cart__51BCD797D46A884E");
+
+            entity.ToTable("Cart");
+
+            entity.HasIndex(e => new { e.UserId, e.ProductId }, "IDX_Cart_User_Product");
+
+            entity.Property(e => e.CartId).HasColumnName("CartID");
+            entity.Property(e => e.AddedDate)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.ProductId).HasColumnName("ProductID");
+            entity.Property(e => e.UserId).HasColumnName("UserID");
+
+            entity.HasOne(d => d.Product).WithMany(p => p.Carts)
+                .HasForeignKey(d => d.ProductId)
+                .HasConstraintName("FK__Cart__ProductID__1AD3FDA4");
+
+            entity.HasOne(d => d.User).WithMany(p => p.Carts)
+                .HasForeignKey(d => d.UserId)
+                .HasConstraintName("FK__Cart__UserID__19DFD96B");
+        });
+
         modelBuilder.Entity<CustomerTest>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PK__Customer__3213E83F480F9F77");
@@ -229,7 +215,7 @@ public partial class SWP391Context : DbContext
                 .HasColumnType("datetime")
                 .HasColumnName("created_at");
             entity.Property(e => e.CustomerId).HasColumnName("customer_id");
-            entity.Property(e => e.TestId).HasColumnName("test_id");
+            entity.Property(e => e.QuizId).HasColumnName("quiz_id");
             entity.Property(e => e.TotalScore).HasColumnName("total_score");
 
             entity.HasOne(d => d.Customer).WithMany(p => p.CustomerTests)
@@ -237,10 +223,30 @@ public partial class SWP391Context : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__CustomerT__custo__76969D2E");
 
-            entity.HasOne(d => d.Test).WithMany(p => p.CustomerTests)
-                .HasForeignKey(d => d.TestId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__CustomerT__test___778AC167");
+            entity.HasOne(d => d.Quiz).WithMany(p => p.CustomerTests)
+                .HasForeignKey(d => d.QuizId)
+                .HasConstraintName("FK_CustomerTest_Quiz");
+        });
+
+        modelBuilder.Entity<Faq>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__QA__3213E83FBE7D644F");
+
+            entity.ToTable("FAQ");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Answer)
+                .HasColumnType("text")
+                .HasColumnName("answer");
+            entity.Property(e => e.IsVisible).HasColumnName("is_visible");
+            entity.Property(e => e.LastUpdateAt)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime")
+                .HasColumnName("last_update_at");
+            entity.Property(e => e.Question)
+                .IsRequired()
+                .HasColumnType("text")
+                .HasColumnName("question");
         });
 
         modelBuilder.Entity<Inventory>(entity =>
@@ -273,6 +279,8 @@ public partial class SWP391Context : DbContext
 
             entity.ToTable("Order");
 
+            entity.HasIndex(e => e.Id, "IDX_Order_User");
+
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.CustomerId).HasColumnName("customer_id");
             entity.Property(e => e.DiscountPrice)
@@ -284,6 +292,7 @@ public partial class SWP391Context : DbContext
                 .HasMaxLength(50)
                 .IsUnicode(false)
                 .HasColumnName("status");
+            entity.Property(e => e.TotalAmount).HasColumnType("decimal(10, 2)");
             entity.Property(e => e.TotalPrice)
                 .HasColumnType("decimal(18, 2)")
                 .HasColumnName("total_price");
@@ -297,11 +306,6 @@ public partial class SWP391Context : DbContext
                 .HasForeignKey(d => d.CustomerId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__Order__customer___5BE2A6F2");
-
-            entity.HasOne(d => d.StatusNavigation).WithMany(p => p.Orders)
-                .HasForeignKey(d => d.Status)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Order__status__5DCAEF64");
 
             entity.HasOne(d => d.Voucher).WithMany(p => p.Orders)
                 .HasForeignKey(d => d.VoucherId)
@@ -330,23 +334,13 @@ public partial class SWP391Context : DbContext
                 .HasConstraintName("FK__OrderItem__produ__619B8048");
         });
 
-        modelBuilder.Entity<OrderStatus>(entity =>
-        {
-            entity.HasKey(e => e.StatusName).HasName("PK__Order_St__501B3752A117CE4A");
-
-            entity.ToTable("Order_Status");
-
-            entity.Property(e => e.StatusName)
-                .HasMaxLength(50)
-                .IsUnicode(false)
-                .HasColumnName("status_name");
-        });
-
         modelBuilder.Entity<Product>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PK__Product__3213E83FBCB48056");
 
             entity.ToTable("Product");
+
+            entity.HasIndex(e => e.ProductTypeId, "IDX_Product_Type");
 
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.Description)
@@ -414,27 +408,6 @@ public partial class SWP391Context : DbContext
                 .HasColumnName("name");
         });
 
-        modelBuilder.Entity<Qa>(entity =>
-        {
-            entity.HasKey(e => e.Id).HasName("PK__QA__3213E83FBE7D644F");
-
-            entity.ToTable("QA");
-
-            entity.Property(e => e.Id).HasColumnName("id");
-            entity.Property(e => e.Answer)
-                .HasColumnType("text")
-                .HasColumnName("answer");
-            entity.Property(e => e.IsVisible).HasColumnName("is_visible");
-            entity.Property(e => e.LastUpdateAt)
-                .HasDefaultValueSql("(getdate())")
-                .HasColumnType("datetime")
-                .HasColumnName("last_update_at");
-            entity.Property(e => e.Question)
-                .IsRequired()
-                .HasColumnType("text")
-                .HasColumnName("question");
-        });
-
         modelBuilder.Entity<Quiz>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PK__Quiz__3213E83FA27FC890");
@@ -446,12 +419,9 @@ public partial class SWP391Context : DbContext
                 .IsRequired()
                 .HasColumnType("text")
                 .HasColumnName("question");
-            entity.Property(e => e.TestId).HasColumnName("test_id");
-
-            entity.HasOne(d => d.Test).WithMany(p => p.Quizzes)
-                .HasForeignKey(d => d.TestId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Quiz__test_id__7A672E12");
+            entity.Property(e => e.Title)
+                .HasMaxLength(255)
+                .HasColumnName("title");
         });
 
         modelBuilder.Entity<QuizAnswer>(entity =>
@@ -546,18 +516,24 @@ public partial class SWP391Context : DbContext
             entity.Property(e => e.Score).HasColumnName("score");
         });
 
-        modelBuilder.Entity<Test>(entity =>
+        modelBuilder.Entity<Transaction>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK__Test__3213E83F2B314D1C");
+            entity.HasKey(e => e.TransactionId).HasName("PK__Transact__55433A4B984B0262");
 
-            entity.ToTable("Test");
+            entity.ToTable("Transaction");
 
-            entity.Property(e => e.Id).HasColumnName("id");
-            entity.Property(e => e.Title)
-                .IsRequired()
-                .HasMaxLength(255)
-                .IsUnicode(false)
-                .HasColumnName("title");
+            entity.Property(e => e.TransactionId).HasColumnName("TransactionID");
+            entity.Property(e => e.Amount).HasColumnType("decimal(10, 2)");
+            entity.Property(e => e.CreatedDate)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.OrderId).HasColumnName("OrderID");
+            entity.Property(e => e.PaymentMethod).HasMaxLength(50);
+            entity.Property(e => e.Status).HasMaxLength(20);
+
+            entity.HasOne(d => d.Order).WithMany(p => p.Transactions)
+                .HasForeignKey(d => d.OrderId)
+                .HasConstraintName("FK__Transacti__Order__1F98B2C1");
         });
 
         modelBuilder.Entity<Voucher>(entity =>
