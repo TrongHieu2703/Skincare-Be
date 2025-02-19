@@ -9,6 +9,9 @@ using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
+using BCrypt.Net;
+
+
 
 namespace Skincare.Services.Implements
 {
@@ -23,11 +26,13 @@ namespace Skincare.Services.Implements
             _configuration = configuration;
         }
 
+
+
         public async Task<LoginResponse> LoginAsync(LoginRequest loginRequest)
         {
             var user = await _accountRepository.GetByEmailAsync(loginRequest.Email);
-            if (user == null || user.PasswordHash != loginRequest.Password)
-                return null; // Password hash check should be improved with hashing.
+            if (user == null || !VerifyPassword(loginRequest.Password, user.PasswordHash))
+                return null;
 
             var token = GenerateJwtToken(user);
             return new LoginResponse { Token = token, UserId = user.Id, Email = user.Email };
@@ -42,12 +47,12 @@ namespace Skincare.Services.Implements
             {
                 Username = registerRequest.Username,
                 Email = registerRequest.Email,
-                PasswordHash = registerRequest.Password, // Hash password properly in production
+                PasswordHash = HashPassword(registerRequest.Password),
                 Role = "User",
                 CreatedAt = DateTime.UtcNow
             };
 
-            await _accountRepository.AddAsync(newUser);
+            await _accountRepository.CreateAccountAsync(newUser);
             return true;
         }
 
@@ -60,6 +65,8 @@ namespace Skincare.Services.Implements
             {
                 new Claim(JwtRegisteredClaimNames.Sub, user.Email),
                 new Claim("userId", user.Id.ToString()),
+                new Claim(ClaimTypes.Name, user.Username),
+                new Claim(ClaimTypes.Email, user.Email),
                 new Claim(ClaimTypes.Role, user.Role)
             };
 
@@ -73,5 +80,20 @@ namespace Skincare.Services.Implements
 
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
+
+
+
+        private string HashPassword(string password)
+        {
+            return BCrypt.Net.BCrypt.HashPassword(password);
+        }
+
+        private bool VerifyPassword(string password, string hashedPassword)
+        {
+            return BCrypt.Net.BCrypt.Verify(password, hashedPassword);
+        }
+
+
+
     }
 }

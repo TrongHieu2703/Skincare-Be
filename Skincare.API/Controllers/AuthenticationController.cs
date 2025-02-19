@@ -11,15 +11,17 @@ namespace Skincare.API.Controllers
     [ApiController]
     public class AuthenticationController : ControllerBase
     {
-        private readonly IAuthenticationService _authService;
+        private readonly Skincare.Services.Interfaces.IAuthenticationService _authService;
 
-        public AuthenticationController(IAuthenticationService authService)
+        public AuthenticationController(Skincare.Services.Interfaces.IAuthenticationService authService)
         {
             _authService = authService;
         }
 
+
         [HttpPost("login")]
-        public async Task<IActionResult> Login([FromBody] LoginRequest loginRequest)
+        public async Task<IActionResult> Login([FromBody] Skincare.BusinessObjects.DTOs.LoginRequest loginRequest)
+
         {
             var result = await _authService.LoginAsync(loginRequest);
             if (result == null)
@@ -29,7 +31,7 @@ namespace Skincare.API.Controllers
         }
 
         [HttpPost("register")]
-        public async Task<IActionResult> Register([FromBody] RegisterRequest registerRequest)
+        public async Task<IActionResult> Register([FromBody] Skincare.BusinessObjects.DTOs.RegisterRequest registerRequest)
         {
             var result = await _authService.RegisterAsync(registerRequest);
             if (!result)

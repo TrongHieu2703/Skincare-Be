@@ -26,7 +26,7 @@ namespace Skincare.API
                 options.UseSqlServer(connectionString));
 
             // 🔥 3. Đăng ký Repository (Cần đăng ký tất cả Repository)
-            builder.Services.AddScoped<IAccountRepository, AccountRepository>();
+            builder.Services.AddScoped<IAccountRepository, AccountRepository>();           
             builder.Services.AddScoped<IOrderRepository, OrderRepository>();
             builder.Services.AddScoped<IProductRepository, ProductRepository>();
             builder.Services.AddScoped<IReviewRepository, ReviewRepository>();
@@ -34,6 +34,7 @@ namespace Skincare.API
 
             // 🔥 4. Đăng ký Service (Tương tự Repository)
             builder.Services.AddScoped<IAccountService, AccountService>();
+            builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
             builder.Services.AddScoped<IOrderService, OrderService>();
             builder.Services.AddScoped<IProductService, ProductService>();
             builder.Services.AddScoped<IReviewService, ReviewService>();
@@ -57,6 +58,7 @@ namespace Skincare.API
                 });
 
             // 🔥 6. Đăng ký Swagger để hỗ trợ API documentation
+            builder.Services.AddControllers();
             builder.Services.AddAuthorization();
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
@@ -91,11 +93,11 @@ namespace Skincare.API
 
             // 🔥 11. Middleware Authentication & Authorization
             app.UseHttpsRedirection();
-            //app.UseAuthentication();
-            //app.UseAuthorization();
+            app.UseAuthentication();
+            app.UseAuthorization();
 
             // 🔥 12. Định tuyến API
-            //app.MapControllers();
+            app.MapControllers();
 
             app.Run();
         }
