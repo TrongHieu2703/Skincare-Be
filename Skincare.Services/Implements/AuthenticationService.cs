@@ -63,17 +63,16 @@ namespace Skincare.Services.Implements
 
             var claims = new[]
             {
-                new Claim(JwtRegisteredClaimNames.Sub, user.Email),
-                new Claim("userId", user.Id.ToString()),
-                new Claim(ClaimTypes.Name, user.Username),
-                new Claim(ClaimTypes.Email, user.Email),
-                new Claim(ClaimTypes.Role, user.Role)
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),//nên để id chính là claim đầu tiên để xác thực
+                new Claim(ClaimTypes.Email, user.Email),//claim thứ 2 thường là email hoặc username
+                new Claim(ClaimTypes.Role, user.Role),//ở đây role cần thiết hơn username do đã có email rồi, nên để là claim thứ 3
+                new Claim(ClaimTypes.Name, user.Username)
             };
 
             var token = new JwtSecurityToken(
-                _configuration["Jwt:Issuer"],
-                _configuration["Jwt:Audience"],
-                claims,
+                //_configuration["Jwt:Issuer"],
+                //_configuration["Jwt:Audience"],
+                claims : claims,
                 expires: DateTime.UtcNow.AddHours(2),
                 signingCredentials: creds
             );
