@@ -26,7 +26,7 @@ namespace Skincare.API
                 options.UseSqlServer(connectionString));
 
             // 🔥 3. Đăng ký Repository (Cần đăng ký tất cả Repository)
-            builder.Services.AddScoped<IAccountRepository, AccountRepository>();           
+            builder.Services.AddScoped<IAccountRepository, AccountRepository>();
             builder.Services.AddScoped<IOrderRepository, OrderRepository>();
             builder.Services.AddScoped<IProductRepository, ProductRepository>();
             builder.Services.AddScoped<IReviewRepository, ReviewRepository>();
@@ -69,10 +69,11 @@ namespace Skincare.API
             {
                 options.AddPolicy(corsPolicyName, policy =>
                 {
-                    policy.WithOrigins("http://localhost:3000", "http://localhost:5173") // Thêm frontend của bạn vào đây
+                    policy.WithOrigins("http://localhost:5173") 
                           .AllowAnyMethod()
                           .AllowAnyHeader()
                           .AllowCredentials();
+
                 });
             });
 
@@ -92,7 +93,7 @@ namespace Skincare.API
             app.UseCors(corsPolicyName);
 
             // 🔥 11. Middleware Authentication & Authorization
-            app.UseHttpsRedirection();
+            //app.UseHttpsRedirection();
             app.UseAuthentication();
             app.UseAuthorization();
 
