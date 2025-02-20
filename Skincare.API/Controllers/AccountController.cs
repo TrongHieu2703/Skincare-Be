@@ -1,7 +1,9 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Skincare.BusinessObjects.Entities;
 using Skincare.Services.Interfaces;
 using System.Collections.Generic;
+using System.Security.Claims;
 using System.Threading.Tasks;
 
 namespace Skincare.API.Controllers
@@ -11,10 +13,12 @@ namespace Skincare.API.Controllers
     public class AccountController : ControllerBase
     {
         private readonly IAccountService _accountService;
+        private readonly ILogger<AccountController> _logger;
 
-        public AccountController(IAccountService accountService)
+        public AccountController(IAccountService accountService, ILogger<AccountController> logger)
         {
             _accountService = accountService;
+            _logger = logger;
         }
 
         [HttpGet]
@@ -68,5 +72,30 @@ namespace Skincare.API.Controllers
             await _accountService.DeleteAccountAsync(id);
             return NoContent();
         }
+
+        [HttpGet("user-profile")]
+        [Authorize] // Yêu cầu xác thực
+        public async Task<IActionResult> GetAccountInfo()
+        {
+            try
+            {
+                // Lấy UserId từ token
+                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (userId == null)
+                    return Unauthorized();
+
+                var userProfile = await _accountService.GetUserProfile(int.Parse(userId));
+                if (userProfile == null)
+                    return NotFound("User not found");
+
+                return Ok(userProfile);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Error fetching account info: " + ex);
+                return BadRequest("An error has occurred");
+            }
+        }
+
     }
 }

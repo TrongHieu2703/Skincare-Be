@@ -4,6 +4,9 @@ using Skincare.BusinessObjects.DTOs;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity.Data;
+using Microsoft.AspNetCore.Authorization;
+using Skincare.Services.Implements;
+using System.Security.Claims;
 
 namespace Skincare.API.Controllers
 {
@@ -41,6 +44,8 @@ namespace Skincare.API.Controllers
             }
             
         }
+       
+
 
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] Skincare.BusinessObjects.DTOs.RegisterRequest registerRequest)
@@ -59,6 +64,6 @@ namespace Skincare.API.Controllers
                 _logger.LogError("Error register: " + ex);
                 return BadRequest("An error has occured when register");
             }
-        }
+        }  
     }
 }

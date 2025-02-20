@@ -35,7 +35,7 @@ namespace Skincare.Services.Implements
                 return null;
 
             var token = GenerateJwtToken(user);
-            return new LoginResponse { Token = token, UserId = user.Id, Email = user.Email };
+            return new LoginResponse { Token = token, Role = user.Role};
         }
 
         public async Task<bool> RegisterAsync(RegisterRequest registerRequest)

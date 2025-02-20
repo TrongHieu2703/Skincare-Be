@@ -1,7 +1,9 @@
-﻿using Skincare.BusinessObjects.Entities;
+﻿using Skincare.BusinessObjects.DTOs;
+using Skincare.BusinessObjects.Entities;
 using Skincare.Repositories.Interfaces;
 using Skincare.Services.Interfaces;
 using System.Collections.Generic;
+using System.Net;
 using System.Threading.Tasks;
 
 namespace Skincare.Services.Implements
@@ -43,6 +45,24 @@ namespace Skincare.Services.Implements
         public async Task DeleteAccountAsync(int id)
         {
             await _accountRepository.DeleteAccountAsync(id);
+        }
+
+        public async Task<UProfileDTO> GetUserProfile(int id)
+        {
+            var account = await _accountRepository.GetAccountByIdAsync(id);
+            if (account == null)
+            {
+                return null;
+            }
+
+            return new UProfileDTO()
+            {
+                Username = account.Username,
+                Email = account.Email,
+                Address = account.Address,
+                Avatar = account.Avatar,
+                PhoneNumber = account.PhoneNumber
+            };
         }
     }
 }
