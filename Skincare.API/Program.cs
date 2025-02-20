@@ -92,7 +92,7 @@ namespace Skincare.API
             app.UseCors(corsPolicyName);
 
             // 🔥 11. Middleware Authentication & Authorization
-            app.UseHttpsRedirection(); // Bỏ nếu cần HTTP
+            app.UseHttpsRedirection(); 
             app.UseAuthentication();
             app.UseAuthorization();
 
