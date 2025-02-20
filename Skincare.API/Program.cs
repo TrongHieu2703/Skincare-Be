@@ -9,6 +9,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Skincare.API.Middleware;
+using System.Text.Json.Serialization;
 
 namespace Skincare.API
 {
@@ -57,6 +58,46 @@ namespace Skincare.API
                     };
                 });
 
+            // Đăng ký Controllers và Swagger với JWT cấu hình
+            builder.Services.AddControllers().AddJsonOptions(options =>
+            {
+                options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+            });
+            builder.Services.AddEndpointsApiExplorer();
+            builder.Services.AddSwaggerGen(options =>
+            {
+                options.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+                {
+                    Title = "Skincare API",
+                    Version = "v1"
+                });
+
+                // Thêm cấu hình Bearer Token vào Swagger
+                options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+                {
+                    In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+                    Description = "Please enter JWT with Bearer prefix in this field",
+                    Name = "Authorization",
+                    Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+                    Scheme = "Bearer"
+                });
+
+                options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+     {
+         {
+             new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+             {
+                 Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                 {
+                     Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                     Id = "Bearer"
+                 }
+             },
+             new string[] { }
+         }
+     });
+            });
+
             // 🔥 6. Đăng ký Swagger
             builder.Services.AddControllers();
             builder.Services.AddAuthorization();
@@ -92,7 +133,7 @@ namespace Skincare.API
             app.UseCors(corsPolicyName);
 
             // 🔥 11. Middleware Authentication & Authorization
-            app.UseHttpsRedirection(); 
+            app.UseHttpsRedirection();
             app.UseAuthentication();
             app.UseAuthorization();
 

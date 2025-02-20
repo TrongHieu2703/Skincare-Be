@@ -1,4 +1,5 @@
-﻿using Skincare.BusinessObjects.Entities;
+﻿using Skincare.BusinessObjects.DTOs;
+using Skincare.BusinessObjects.Entities;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -12,5 +13,6 @@ namespace Skincare.Services.Interfaces
         Task<Account> CreateAccountAsync(Account account);
         Task UpdateAccountAsync(Account account);
         Task DeleteAccountAsync(int id);
+        Task<UProfileDTO> GetUserProfile(int id);
     }
 }
