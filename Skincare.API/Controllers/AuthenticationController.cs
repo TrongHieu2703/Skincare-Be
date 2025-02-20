@@ -59,6 +59,6 @@ namespace Skincare.API.Controllers
                 _logger.LogError("Error register: " + ex);
                 return BadRequest("An error has occured when register");
             }
-        }
+        }  
     }
 }
