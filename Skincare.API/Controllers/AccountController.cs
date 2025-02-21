@@ -24,62 +24,117 @@ namespace Skincare.API.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAllAccounts()
         {
-            var accounts = await _accountService.GetAllAccountsAsync();
-            return Ok(accounts);
+            try
+            {
+                var accounts = await _accountService.GetAllAccountsAsync();
+                return Ok(accounts);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching all accounts");
+                return StatusCode(500, "Internal server error");
+            }
         }
 
         [HttpGet("{id}")]
         public async Task<IActionResult> GetAccountById(int id)
         {
-            var account = await _accountService.GetAccountByIdAsync(id);
-            if (account == null)
-                return NotFound();
-            return Ok(account);
+            try
+            {
+                var account = await _accountService.GetAccountByIdAsync(id);
+                if (account == null)
+                    return NotFound();
+
+                return Ok(account);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error fetching account with ID {id}");
+                return StatusCode(500, "Internal server error");
+            }
         }
 
         [HttpGet("by-email/{email}")]
         public async Task<IActionResult> GetByEmail(string email)
         {
-            var account = await _accountService.GetByEmailAsync(email);
-            if (account == null)
-                return NotFound();
-            return Ok(account);
+            try
+            {
+                var account = await _accountService.GetByEmailAsync(email);
+                if (account == null)
+                    return NotFound();
+
+                return Ok(account);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error fetching account with email {email}");
+                return StatusCode(500, "Internal server error");
+            }
         }
 
         [HttpPost]
         public async Task<IActionResult> CreateAccount([FromBody] Account account)
         {
             if (account == null)
-                return BadRequest();
+                return BadRequest("Account is null");
 
-            var createdAccount = await _accountService.CreateAccountAsync(account);
-            return CreatedAtAction(nameof(GetAccountById), new { id = createdAccount.Id }, createdAccount);
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            try
+            {
+                var createdAccount = await _accountService.CreateAccountAsync(account);
+                return CreatedAtAction(nameof(GetAccountById), new { id = createdAccount.Id }, createdAccount);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating account");
+                return StatusCode(500, "Internal server error");
+            }
         }
 
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateAccount(int id, [FromBody] Account account)
         {
             if (account == null || account.Id != id)
-                return BadRequest();
+                return BadRequest("Account ID mismatch");
 
-            await _accountService.UpdateAccountAsync(account);
-            return NoContent();
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            try
+            {
+                await _accountService.UpdateAccountAsync(account);
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error updating account with ID {id}");
+                return StatusCode(500, "Internal server error");
+            }
         }
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteAccount(int id)
         {
-            await _accountService.DeleteAccountAsync(id);
-            return NoContent();
+            try
+            {
+                await _accountService.DeleteAccountAsync(id);
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error deleting account with ID {id}");
+                return StatusCode(500, "Internal server error");
+            }
         }
 
         [HttpGet("user-profile")]
-        [Authorize] // Yêu cầu xác thực
+        [Authorize]
         public async Task<IActionResult> GetAccountInfo()
         {
             try
             {
-                // Lấy UserId từ token
                 var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 if (userId == null)
                     return Unauthorized();
@@ -92,10 +147,9 @@ namespace Skincare.API.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError("Error fetching account info: " + ex);
-                return BadRequest("An error has occurred");
+                _logger.LogError(ex, "Error fetching account info");
+                return StatusCode(500, "Internal server error");
             }
         }
-
     }
 }
