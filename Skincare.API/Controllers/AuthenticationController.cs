@@ -2,10 +2,7 @@
 using Skincare.Services.Interfaces;
 using Skincare.BusinessObjects.DTOs;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Identity.Data;
 using Microsoft.AspNetCore.Authorization;
-using Skincare.Services.Implements;
 using System.Security.Claims;
 
 namespace Skincare.API.Controllers
@@ -14,43 +11,48 @@ namespace Skincare.API.Controllers
     [ApiController]
     public class AuthenticationController : ControllerBase
     {
-        private readonly Skincare.Services.Interfaces.IAuthenticationService _authService;
-        //nên sử dụng ILogger để log lỗi ở phía back end, tránh throw lỗi phức tạp ra phía client
-        private ILogger<AuthenticationController> _logger;
+        private readonly IAuthenticationService _authService;
+        private readonly ILogger<AuthenticationController> _logger;
 
-        public AuthenticationController(Skincare.Services.Interfaces.IAuthenticationService authService, ILogger<AuthenticationController> logger)
+        public AuthenticationController(IAuthenticationService authService, ILogger<AuthenticationController> logger)
         {
             _authService = authService;
             _logger = logger;
         }
 
-
         [HttpPost("login")]
-        public async Task<IActionResult> Login([FromBody] Skincare.BusinessObjects.DTOs.LoginRequest loginRequest)
-
+        public async Task<IActionResult> Login([FromBody] LoginRequest loginRequest)
         {
-            //nên có try catch để hạn chế bị kill app khi găp lỗi bất ngờ
+            if (loginRequest == null)
+                return BadRequest("Login request is null");
+
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
             try
             {
                 var result = await _authService.LoginAsync(loginRequest);
                 if (result == null)
                     return Unauthorized("Invalid email or password");
+
                 return Ok(result);
             }
             catch (Exception ex)
             {
-                _logger.LogError("Error login: " + ex);
-                return BadRequest("An error has occured when login");
+                _logger.LogError(ex, "Error during login");
+                return StatusCode(500, "Internal server error");
             }
-            
         }
-       
-
 
         [HttpPost("register")]
-        public async Task<IActionResult> Register([FromBody] Skincare.BusinessObjects.DTOs.RegisterRequest registerRequest)
+        public async Task<IActionResult> Register([FromBody] RegisterRequest registerRequest)
         {
-            //nên có try catch để hạn chế bị kill app khi găp lỗi bất ngờ
+            if (registerRequest == null)
+                return BadRequest("Register request is null");
+
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
             try
             {
                 var result = await _authService.RegisterAsync(registerRequest);
@@ -61,9 +63,9 @@ namespace Skincare.API.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError("Error register: " + ex);
-                return BadRequest("An error has occured when register");
+                _logger.LogError(ex, "Error during registration");
+                return StatusCode(500, "Internal server error");
             }
-        }  
+        }
     }
 }

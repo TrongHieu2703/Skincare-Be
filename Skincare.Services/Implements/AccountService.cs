@@ -1,68 +1,135 @@
-﻿using Skincare.BusinessObjects.DTOs;
-using Skincare.BusinessObjects.Entities;
-using Skincare.Repositories.Interfaces;
+﻿using Skincare.BusinessObjects.Entities;
 using Skincare.Services.Interfaces;
+using Skincare.Repositories.Interfaces;
 using System.Collections.Generic;
-using System.Net;
 using System.Threading.Tasks;
+using Skincare.BusinessObjects.DTOs;
+using Microsoft.Extensions.Logging;
+using System;
 
 namespace Skincare.Services.Implements
 {
     public class AccountService : IAccountService
     {
         private readonly IAccountRepository _accountRepository;
+        private readonly ILogger<AccountService> _logger;
 
-        public AccountService(IAccountRepository accountRepository)
+        public AccountService(IAccountRepository accountRepository, ILogger<AccountService> logger)
         {
             _accountRepository = accountRepository;
+            _logger = logger;
         }
 
         public async Task<IEnumerable<Account>> GetAllAccountsAsync()
         {
-            return await _accountRepository.GetAllAccountsAsync();
+            try
+            {
+                _logger.LogInformation("Fetching all accounts.");
+                return await _accountRepository.GetAllAccountsAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "An error occurred while fetching all accounts.");
+                throw;
+            }
         }
 
         public async Task<Account> GetAccountByIdAsync(int id)
         {
-            return await _accountRepository.GetAccountByIdAsync(id);
+            try
+            {
+                _logger.LogInformation($"Fetching account with ID: {id}");
+                return await _accountRepository.GetAccountByIdAsync(id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"An error occurred while fetching account with ID: {id}");
+                throw;
+            }
         }
 
         public async Task<Account> GetByEmailAsync(string email)
         {
-            return await _accountRepository.GetByEmailAsync(email);
+            try
+            {
+                _logger.LogInformation($"Fetching account with email: {email}");
+                return await _accountRepository.GetByEmailAsync(email);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"An error occurred while fetching account with email: {email}");
+                throw;
+            }
         }
 
         public async Task<Account> CreateAccountAsync(Account account)
         {
-            return await _accountRepository.CreateAccountAsync(account);
+            try
+            {
+                _logger.LogInformation($"Creating account for email: {account.Email}");
+                return await _accountRepository.CreateAccountAsync(account);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"An error occurred while creating account for email: {account.Email}");
+                throw;
+            }
         }
 
         public async Task UpdateAccountAsync(Account account)
         {
-            await _accountRepository.UpdateAccountAsync(account);
+            try
+            {
+                _logger.LogInformation($"Updating account with ID: {account.Id}");
+                await _accountRepository.UpdateAccountAsync(account);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"An error occurred while updating account with ID: {account.Id}");
+                throw;
+            }
         }
 
         public async Task DeleteAccountAsync(int id)
         {
-            await _accountRepository.DeleteAccountAsync(id);
+            try
+            {
+                _logger.LogInformation($"Deleting account with ID: {id}");
+                await _accountRepository.DeleteAccountAsync(id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"An error occurred while deleting account with ID: {id}");
+                throw;
+            }
         }
 
         public async Task<UProfileDTO> GetUserProfile(int id)
         {
-            var account = await _accountRepository.GetAccountByIdAsync(id);
-            if (account == null)
+            try
             {
-                return null;
-            }
+                _logger.LogInformation($"Fetching user profile for account ID: {id}");
+                var account = await _accountRepository.GetAccountByIdAsync(id);
+                if (account == null)
+                {
+                    _logger.LogWarning($"User profile not found for account ID: {id}");
+                    return null;
+                }
 
-            return new UProfileDTO()
+                return new UProfileDTO
+                {
+                    Username = account.Username,
+                    Email = account.Email,
+                    Address = account.Address,
+                    Avatar = account.Avatar,
+                    PhoneNumber = account.PhoneNumber
+                };
+            }
+            catch (Exception ex)
             {
-                Username = account.Username,
-                Email = account.Email,
-                Address = account.Address,
-                Avatar = account.Avatar,
-                PhoneNumber = account.PhoneNumber
-            };
+                _logger.LogError(ex, $"An error occurred while fetching user profile for account ID: {id}");
+                throw;
+            }
         }
     }
 }

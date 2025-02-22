@@ -1,6 +1,28 @@
-﻿namespace Skincare.API.Configurations
+﻿using Microsoft.Extensions.DependencyInjection;
+using Skincare.Services.Interfaces;
+using Skincare.Services.Implements;
+using Skincare.Repositories.Interfaces;
+using Skincare.Repositories.Implements;
+
+namespace Skincare.API.Configurations
 {
-    public class DependencyInjection
+    public static class DependencyInjection
     {
+        public static void AddServices(this IServiceCollection services)
+        {
+            // Register services
+            services.AddScoped<IAccountService, AccountService>();
+            services.AddScoped<IOrderService, OrderService>();
+            services.AddScoped<IProductService, ProductService>();
+            services.AddScoped<IReviewService, ReviewService>();
+            services.AddScoped<IAuthenticationService, AuthenticationService>();
+
+            // Register repositories
+            services.AddScoped<IAccountRepository, AccountRepository>();
+            services.AddScoped<IOrderRepository, OrderRepository>();
+            services.AddScoped<IProductRepository, ProductRepository>();
+            services.AddScoped<IReviewRepository, ReviewRepository>();
+            services.AddScoped<IAuthenticationRepository, AuthenticationRepository>();
+        }
     }
 }

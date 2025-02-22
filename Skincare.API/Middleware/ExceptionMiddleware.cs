@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Net;
 using System.Text.Json;
@@ -9,10 +10,12 @@ namespace Skincare.API.Middleware
     public class ExceptionMiddleware
     {
         private readonly RequestDelegate _next;
+        private readonly ILogger<ExceptionMiddleware> _logger;
 
-        public ExceptionMiddleware(RequestDelegate next)
+        public ExceptionMiddleware(RequestDelegate next, ILogger<ExceptionMiddleware> logger)
         {
             _next = next;
+            _logger = logger;
         }
 
         public async Task InvokeAsync(HttpContext httpContext)
@@ -23,6 +26,7 @@ namespace Skincare.API.Middleware
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "An unhandled exception has occurred.");
                 await HandleExceptionAsync(httpContext, ex);
             }
         }
@@ -35,7 +39,8 @@ namespace Skincare.API.Middleware
             var response = new
             {
                 message = "Internal Server Error",
-                details = exception.Message
+                details = exception.Message,
+                stackTrace = exception.StackTrace
             };
 
             return context.Response.WriteAsync(JsonSerializer.Serialize(response));
