@@ -67,7 +67,20 @@ namespace Skincare.Services.Implements
             try
             {
                 _logger.LogInformation($"Creating account for email: {account.Email}");
-                return await _accountRepository.CreateAccountAsync(account);
+
+                var newAccount = new Account
+                {
+                    Username = account.Username,
+                    Email = account.Email,
+                    PasswordHash = account.PasswordHash,
+                    Role = "User", // ✅ Role mặc định
+                    Address = null, // Để null cho người dùng tự cập nhật sau
+                    Avatar = null,
+                    PhoneNumber = null,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                return await _accountRepository.CreateAccountAsync(newAccount);
             }
             catch (Exception ex)
             {
@@ -75,6 +88,7 @@ namespace Skincare.Services.Implements
                 throw;
             }
         }
+
 
         public async Task UpdateAccountAsync(Account account)
         {

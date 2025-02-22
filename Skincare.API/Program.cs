@@ -1,9 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Skincare.Repositories.Context;
-using Skincare.Repositories.Implements;
-using Skincare.Repositories.Interfaces;
-using Skincare.Services.Implements;
-using Skincare.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
@@ -43,26 +39,34 @@ namespace Skincare.API
             // Đăng ký Repository và Service
             services.AddServices();
 
-            // Thêm Authentication (JWT)
-            services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-                .AddJwtBearer(options =>
+            // Đọc secret key từ appsettings.json
+            var jwtKey = configuration["Jwt:Key"];
+
+            // ✅ Thêm Authentication (JWT)
+            services.AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+            })
+            .AddJwtBearer(options =>
+            {
+                options.TokenValidationParameters = new TokenValidationParameters
                 {
-                    options.TokenValidationParameters = new TokenValidationParameters
-                    {
-                        ValidateIssuer = false,
-                        ValidateAudience = false,
-                        ValidateLifetime = true,
-                        ValidateIssuerSigningKey = true,
-                        IssuerSigningKey = new SymmetricSecurityKey(
-                            Encoding.UTF8.GetBytes(configuration["Jwt:Key"]))
-                    };
-                });
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+                    ValidateIssuer = false,
+                    ValidateAudience = false,
+                    ValidateLifetime = true,
+                    ClockSkew = TimeSpan.Zero // Không cho phép thời gian trễ
+                };
+            });
 
             // Đăng ký Controllers và Swagger với JWT cấu hình
             services.AddControllers().AddJsonOptions(options =>
             {
                 options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
             });
+
             services.AddEndpointsApiExplorer();
             services.AddSwaggerGen(options =>
             {
@@ -72,11 +76,11 @@ namespace Skincare.API
                     Version = "v1"
                 });
 
-                // Thêm cấu hình Bearer Token vào Swagger
+                // ✅ Cấu hình Bearer Token trong Swagger
                 options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
                 {
                     In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-                    Description = "Please enter JWT with Bearer prefix in this field",
+                    Description = "Nhập JWT Token vào đây, ví dụ: Bearer {token}",
                     Name = "Authorization",
                     Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
                     Scheme = "Bearer"
@@ -104,7 +108,7 @@ namespace Skincare.API
             {
                 options.AddPolicy(corsPolicyName, policy =>
                 {
-                    policy.WithOrigins("http://localhost:5173") // Cho phép React frontend
+                    policy.WithOrigins("http://localhost:5173") // ✅ Cho phép React frontend
                           .AllowAnyMethod()
                           .AllowAnyHeader()
                           .AllowCredentials();
