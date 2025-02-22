@@ -5,6 +5,7 @@ using Skincare.Repositories.Interfaces;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using System;
 
 namespace Skincare.Repositories.Implements
 {
@@ -49,7 +50,25 @@ namespace Skincare.Repositories.Implements
         {
             try
             {
-                return await _context.Accounts.FirstOrDefaultAsync(a => a.Email == email);
+                var account = await _context.Accounts
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(a => a.Email == email);
+
+                if (account == null)
+                {
+                    _logger.LogWarning($"No account found for email: {email}");
+                    return null;
+                }
+
+                // Gán giá trị mặc định cho các trường có thể null
+                account.Username = account.Username ?? string.Empty;
+                account.Address = account.Address ?? string.Empty;
+                account.Avatar = account.Avatar ?? string.Empty;
+                account.PhoneNumber = account.PhoneNumber ?? string.Empty;
+                account.Status = account.Status ?? string.Empty;
+                account.Role = account.Role ?? "User";
+
+                return account;
             }
             catch (Exception ex)
             {
