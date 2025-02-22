@@ -1,5 +1,5 @@
-﻿using Skincare.BusinessObjects.DTOs;
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
+using Skincare.BusinessObjects.DTOs;
 
 namespace Skincare.Services.Interfaces
 {

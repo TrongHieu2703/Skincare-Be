@@ -1,12 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
+using Skincare.BusinessObjects.DTOs;
 
 namespace Skincare.Services.Interfaces
 {
-    internal interface IPaymentService
+    public interface IPaymentService
     {
+        Task<PaymentResult> ProcessPaymentAsync(PaymentRequest paymentRequest);
+        Task<PaymentDetails> GetPaymentDetailsAsync(int id);
+        Task<PaymentStatus> GetPaymentStatusAsync(int id);
     }
 }

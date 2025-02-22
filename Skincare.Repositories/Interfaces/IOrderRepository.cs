@@ -1,6 +1,6 @@
-﻿using Skincare.BusinessObjects.Entities;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading.Tasks;
+using Skincare.BusinessObjects.Entities;
 
 namespace Skincare.Repositories.Interfaces
 {
@@ -8,7 +8,6 @@ namespace Skincare.Repositories.Interfaces
     {
         Task<IEnumerable<Order>> GetAllOrdersAsync();
         Task<Order> GetOrderByIdAsync(int id);
-        Task<IEnumerable<Order>> GetByCustomerIdAsync(int customerId);
         Task<Order> CreateOrderAsync(Order order);
         Task UpdateOrderAsync(Order order);
         Task DeleteOrderAsync(int id);

@@ -5,53 +5,104 @@ using Skincare.Repositories.Interfaces;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 
 namespace Skincare.Repositories.Implements
 {
     public class ProductRepository : IProductRepository
     {
         private readonly SWP391Context _context;
+        private readonly ILogger<ProductRepository> _logger;
 
-        public ProductRepository(SWP391Context context)
+        public ProductRepository(SWP391Context context, ILogger<ProductRepository> logger)
         {
             _context = context;
+            _logger = logger;
         }
 
         public async Task<IEnumerable<Product>> GetAllProductsAsync()
         {
-            return await _context.Products.ToListAsync();
+            try
+            {
+                return await _context.Products.ToListAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching all products");
+                throw;
+            }
         }
 
         public async Task<Product> GetProductByIdAsync(int id)
         {
-            return await _context.Products.FindAsync(id);
+            try
+            {
+                return await _context.Products.FindAsync(id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error fetching product with ID {id}");
+                throw;
+            }
         }
 
         public async Task<IEnumerable<Product>> GetByTypeAsync(int productTypeId)
         {
-            return await _context.Products.Where(p => p.ProductTypeId == productTypeId).ToListAsync();
+            try
+            {
+                return await _context.Products.Where(p => p.ProductTypeId == productTypeId).ToListAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error fetching products for type ID {productTypeId}");
+                throw;
+            }
         }
 
         public async Task<Product> CreateProductAsync(Product product)
         {
-            _context.Products.Add(product);
-            await _context.SaveChangesAsync();
-            return product;
+            try
+            {
+                _context.Products.Add(product);
+                await _context.SaveChangesAsync();
+                return product;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating product");
+                throw;
+            }
         }
 
         public async Task UpdateProductAsync(Product product)
         {
-            _context.Products.Update(product);
-            await _context.SaveChangesAsync();
+            try
+            {
+                _context.Products.Update(product);
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error updating product with ID {product.Id}");
+                throw;
+            }
         }
 
         public async Task DeleteProductAsync(int id)
         {
-            var product = await _context.Products.FindAsync(id);
-            if (product != null)
+            try
             {
-                _context.Products.Remove(product);
-                await _context.SaveChangesAsync();
+                var product = await _context.Products.FindAsync(id);
+                if (product != null)
+                {
+                    _context.Products.Remove(product);
+                    await _context.SaveChangesAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error deleting product with ID {id}");
+                throw;
             }
         }
     }

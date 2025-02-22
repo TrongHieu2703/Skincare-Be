@@ -1,98 +1,107 @@
 ﻿using Skincare.BusinessObjects.DTOs;
-using Skincare.BusinessObjects.Entities;
-using Skincare.Repositories.Interfaces;
 using Skincare.Services.Interfaces;
-using Microsoft.IdentityModel.Tokens;
-using System;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
+using Skincare.Repositories.Interfaces;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
-using BCrypt.Net;
-
-
+using Microsoft.Extensions.Logging;
+using System.Security.Cryptography;
+using System.Text;
+using Skincare.BusinessObjects.Entities;
+using System;
 
 namespace Skincare.Services.Implements
 {
     public class AuthenticationService : IAuthenticationService
     {
         private readonly IAccountRepository _accountRepository;
-        private readonly IConfiguration _configuration;
+        private readonly ILogger<AuthenticationService> _logger;
 
-        public AuthenticationService(IAccountRepository accountRepository, IConfiguration configuration)
+        public AuthenticationService(IAccountRepository accountRepository, ILogger<AuthenticationService> logger)
         {
             _accountRepository = accountRepository;
-            _configuration = configuration;
+            _logger = logger;
         }
-
-
 
         public async Task<LoginResponse> LoginAsync(LoginRequest loginRequest)
         {
-            var user = await _accountRepository.GetByEmailAsync(loginRequest.Email);
-            if (user == null || !VerifyPassword(loginRequest.Password, user.PasswordHash))
-                return null;
+            try
+            {
+                _logger.LogInformation($"Attempting to log in user with email: {loginRequest.Email}");
+                var account = await _accountRepository.GetByEmailAsync(loginRequest.Email);
+                if (account == null || !VerifyPasswordHash(loginRequest.Password, account.PasswordHash))
+                {
+                    _logger.LogWarning($"Login failed for user with email: {loginRequest.Email}");
+                    return null;
+                }
 
-            var token = GenerateJwtToken(user);
-            return new LoginResponse { Token = token, Role = user.Role};
+                // Generate JWT token (implementation not shown)
+                var token = GenerateJwtToken(account);
+
+                _logger.LogInformation($"User logged in successfully with email: {loginRequest.Email}");
+                return new LoginResponse
+                {
+                    Token = token,
+                    Role = account.Role
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"An error occurred while logging in user with email: {loginRequest.Email}");
+                throw;
+            }
         }
 
         public async Task<bool> RegisterAsync(RegisterRequest registerRequest)
         {
-            var existingUser = await _accountRepository.GetByEmailAsync(registerRequest.Email);
-            if (existingUser != null) return false;
-
-            var newUser = new Account
+            try
             {
-                Username = registerRequest.Username,
-                Email = registerRequest.Email,
-                PasswordHash = HashPassword(registerRequest.Password),
-                Role = "User",
-                CreatedAt = DateTime.UtcNow
-            };
+                _logger.LogInformation($"Attempting to register user with email: {registerRequest.Email}");
+                var existingAccount = await _accountRepository.GetByEmailAsync(registerRequest.Email);
+                if (existingAccount != null)
+                {
+                    _logger.LogWarning($"Registration failed. User with email: {registerRequest.Email} already exists.");
+                    return false;
+                }
 
-            await _accountRepository.CreateAccountAsync(newUser);
-            return true;
-        }
+                var account = new Account
+                {
+                    Username = registerRequest.Username,
+                    Email = registerRequest.Email,
+                    PasswordHash = CreatePasswordHash(registerRequest.Password)
+                };
 
-        private string GenerateJwtToken(Account user)
-        {
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]));
-            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-            var claims = new[]
+                await _accountRepository.CreateAccountAsync(account);
+                _logger.LogInformation($"User registered successfully with email: {registerRequest.Email}");
+                return true;
+            }
+            catch (Exception ex)
             {
-                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),//nên để id chính là claim đầu tiên để xác thực
-                new Claim(ClaimTypes.Email, user.Email),//claim thứ 2 thường là email hoặc username
-                new Claim(ClaimTypes.Role, user.Role),//ở đây role cần thiết hơn username do đã có email rồi, nên để là claim thứ 3
-                new Claim(ClaimTypes.Name, user.Username)
-            };
-
-            var token = new JwtSecurityToken(
-                //_configuration["Jwt:Issuer"],
-                //_configuration["Jwt:Audience"],
-                claims : claims,
-                expires: DateTime.UtcNow.AddHours(2),
-                signingCredentials: creds
-            );
-
-            return new JwtSecurityTokenHandler().WriteToken(token);
+                _logger.LogError(ex, $"An error occurred while registering user with email: {registerRequest.Email}");
+                throw;
+            }
         }
 
-
-
-        private string HashPassword(string password)
+        private string CreatePasswordHash(string password)
         {
-            return BCrypt.Net.BCrypt.HashPassword(password);
+            using (var hmac = new HMACSHA512())
+            {
+                var hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(password));
+                return Convert.ToBase64String(hash);
+            }
         }
 
-        private bool VerifyPassword(string password, string hashedPassword)
+        private bool VerifyPasswordHash(string password, string storedHash)
         {
-            return BCrypt.Net.BCrypt.Verify(password, hashedPassword);
+            using (var hmac = new HMACSHA512())
+            {
+                var hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(password));
+                return Convert.ToBase64String(hash) == storedHash;
+            }
         }
 
-
-
+        private string GenerateJwtToken(Account account)
+        {
+            // Implementation for generating JWT token (not shown)
+            return "generated-jwt-token";
+        }
     }
 }

@@ -1,6 +1,6 @@
-﻿using Skincare.BusinessObjects.Entities;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading.Tasks;
+using Skincare.BusinessObjects.Entities;
 
 namespace Skincare.Services.Interfaces
 {

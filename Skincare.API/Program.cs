@@ -7,9 +7,9 @@ using Skincare.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
-using Microsoft.AspNetCore.Cors.Infrastructure;
 using Skincare.API.Middleware;
 using System.Text.Json.Serialization;
+using Skincare.API.Configurations;
 
 namespace Skincare.API
 {
@@ -19,30 +19,32 @@ namespace Skincare.API
         {
             var builder = WebApplication.CreateBuilder(args);
 
-            // 🔥 1. Đọc chuỗi kết nối từ appsettings.json
+            // Đọc chuỗi kết nối từ appsettings.json
             var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
-            // 🔥 2. Cấu hình DbContext
-            builder.Services.AddDbContext<SWP391Context>(options =>
+            // Cấu hình các dịch vụ
+            ConfigureServices(builder.Services, connectionString, builder.Configuration);
+
+            var app = builder.Build();
+
+            // Cấu hình middleware
+            ConfigureMiddleware(app);
+
+            // Chạy ứng dụng
+            app.Run();
+        }
+
+        private static void ConfigureServices(IServiceCollection services, string connectionString, IConfiguration configuration)
+        {
+            // Cấu hình DbContext
+            services.AddDbContext<SWP391Context>(options =>
                 options.UseSqlServer(connectionString));
 
-            // 🔥 3. Đăng ký Repository
-            builder.Services.AddScoped<IAccountRepository, AccountRepository>();
-            builder.Services.AddScoped<IOrderRepository, OrderRepository>();
-            builder.Services.AddScoped<IProductRepository, ProductRepository>();
-            builder.Services.AddScoped<IReviewRepository, ReviewRepository>();
-            builder.Services.AddScoped<ICartRepository, CartRepository>();
+            // Đăng ký Repository và Service
+            services.AddServices();
 
-            // 🔥 4. Đăng ký Service
-            builder.Services.AddScoped<IAccountService, AccountService>();
-            builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
-            builder.Services.AddScoped<IOrderService, OrderService>();
-            builder.Services.AddScoped<IProductService, ProductService>();
-            builder.Services.AddScoped<IReviewService, ReviewService>();
-            builder.Services.AddScoped<ICartService, CartService>();
-
-            // 🔥 5. Thêm Authentication (JWT)
-            builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            // Thêm Authentication (JWT)
+            services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 .AddJwtBearer(options =>
                 {
                     options.TokenValidationParameters = new TokenValidationParameters
@@ -51,20 +53,18 @@ namespace Skincare.API
                         ValidateAudience = false,
                         ValidateLifetime = true,
                         ValidateIssuerSigningKey = true,
-                        //ValidIssuer = builder.Configuration["Jwt:Issuer"],
-                        //ValidAudience = builder.Configuration["Jwt:Audience"],
                         IssuerSigningKey = new SymmetricSecurityKey(
-                            Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]))
+                            Encoding.UTF8.GetBytes(configuration["Jwt:Key"]))
                     };
                 });
 
             // Đăng ký Controllers và Swagger với JWT cấu hình
-            builder.Services.AddControllers().AddJsonOptions(options =>
+            services.AddControllers().AddJsonOptions(options =>
             {
                 options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
             });
-            builder.Services.AddEndpointsApiExplorer();
-            builder.Services.AddSwaggerGen(options =>
+            services.AddEndpointsApiExplorer();
+            services.AddSwaggerGen(options =>
             {
                 options.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
                 {
@@ -83,30 +83,24 @@ namespace Skincare.API
                 });
 
                 options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
-     {
-         {
-             new Microsoft.OpenApi.Models.OpenApiSecurityScheme
-             {
-                 Reference = new Microsoft.OpenApi.Models.OpenApiReference
-                 {
-                     Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
-                     Id = "Bearer"
-                 }
-             },
-             new string[] { }
-         }
-     });
+                {
+                    {
+                        new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+                        {
+                            Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                            {
+                                Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                                Id = "Bearer"
+                            }
+                        },
+                        new string[] { }
+                    }
+                });
             });
 
-            // 🔥 6. Đăng ký Swagger
-            builder.Services.AddControllers();
-            builder.Services.AddAuthorization();
-            builder.Services.AddEndpointsApiExplorer();
-            builder.Services.AddSwaggerGen();
-
-            // 🔥 7. Đăng ký CORS
+            // Đăng ký CORS
             var corsPolicyName = "AllowSpecificOrigins";
-            builder.Services.AddCors(options =>
+            services.AddCors(options =>
             {
                 options.AddPolicy(corsPolicyName, policy =>
                 {
@@ -117,27 +111,30 @@ namespace Skincare.API
                 });
             });
 
-            var app = builder.Build();
+            services.AddAuthorization();
+        }
 
-            // 🔥 8. Middleware xử lý lỗi
+        private static void ConfigureMiddleware(WebApplication app)
+        {
+            // Middleware xử lý lỗi
             app.UseMiddleware<ExceptionMiddleware>();
 
-            // 🔥 9. Bật Swagger UI trong môi trường Development
+            // Bật Swagger UI trong môi trường Development
             if (app.Environment.IsDevelopment())
             {
                 app.UseSwagger();
                 app.UseSwaggerUI();
             }
 
-            // 🔥 10. Áp dụng CORS
-            app.UseCors(corsPolicyName);
+            // Áp dụng CORS
+            app.UseCors("AllowSpecificOrigins");
 
-            // 🔥 11. Middleware Authentication & Authorization
+            // Middleware Authentication & Authorization
             app.UseHttpsRedirection();
             app.UseAuthentication();
             app.UseAuthorization();
 
-            // 🔥 12. Middleware Chuyển Hướng đến Swagger nếu Truy Cập Root
+            // Middleware Chuyển Hướng đến Swagger nếu Truy Cập Root
             app.Use(async (context, next) =>
             {
                 if (context.Request.Path == "/")
@@ -148,11 +145,8 @@ namespace Skincare.API
                 await next();
             });
 
-            // 🔥 13. Định tuyến API
+            // Định tuyến API
             app.MapControllers();
-
-            // 🔥 14. Chạy Ứng Dụng
-            app.Run();
         }
     }
 }
