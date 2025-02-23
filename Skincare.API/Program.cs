@@ -108,7 +108,7 @@ namespace Skincare.API
             {
                 options.AddPolicy(corsPolicyName, policy =>
                 {
-                    policy.WithOrigins("http://localhost:5173") // ✅ Cho phép React frontend
+                    policy.WithOrigins("http://localhost:3000") 
                           .AllowAnyMethod()
                           .AllowAnyHeader()
                           .AllowCredentials();
