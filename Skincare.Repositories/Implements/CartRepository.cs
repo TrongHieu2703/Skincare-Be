@@ -20,11 +20,16 @@ namespace Skincare.Repositories.Implements
             _logger = logger;
         }
 
-        public async Task<IEnumerable<Cart>> GetAllCartsAsync()
+        public async Task<IEnumerable<Cart>> GetAllCartsAsync(int pageNumber, int pageSize)
         {
             try
             {
-                return await _context.Carts.Include(c => c.Product).ToListAsync();
+                return await _context.Carts
+                    .AsNoTracking()
+                    .Include(c => c.Product)
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync();
             }
             catch (Exception ex)
             {
@@ -32,6 +37,7 @@ namespace Skincare.Repositories.Implements
                 throw;
             }
         }
+
 
         public async Task<Cart> GetCartByIdAsync(int cartId)
         {

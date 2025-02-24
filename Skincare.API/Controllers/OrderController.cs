@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using NuGet.Packaging;
 using Skincare.BusinessObjects.DTOs;
 using Skincare.BusinessObjects.Entities;
 using Skincare.Services.Interfaces;
@@ -64,17 +65,16 @@ namespace Skincare.API.Controllers
 
             try
             {
-                // Mapping DTO to Entity
                 var newOrder = new Order
                 {
                     CustomerId = createOrderDto.CustomerId,
                     VoucherId = createOrderDto.VoucherId,
                     TotalPrice = createOrderDto.TotalPrice,
                     DiscountPrice = createOrderDto.DiscountPrice,
-                    TotalAmount = createOrderDto.TotalAmount,
+                    TotalAmount = createOrderDto.TotalPrice - (createOrderDto.DiscountPrice ?? 0),
                     IsPrepaid = createOrderDto.IsPrepaid,
                     Status = createOrderDto.Status,
-                    UpdatedAt = DateTime.Now,
+                    UpdatedAt = DateTime.UtcNow,
                     OrderItems = createOrderDto.OrderItems.Select(item => new OrderItem
                     {
                         ProductId = item.ProductId,
@@ -85,13 +85,11 @@ namespace Skincare.API.Controllers
                         PaymentMethod = tx.PaymentMethod,
                         Status = tx.Status,
                         Amount = tx.Amount,
-                        CreatedDate = tx.CreatedDate ?? DateTime.Now
+                        CreatedDate = tx.CreatedDate ?? DateTime.UtcNow
                     }).ToList()
                 };
 
-                // Gọi service để lưu đơn hàng
                 var createdOrder = await _orderService.CreateOrderAsync(newOrder);
-
                 return CreatedAtAction(nameof(GetOrderById), new { id = createdOrder.Id }, createdOrder);
             }
             catch (Exception ex)
@@ -100,7 +98,6 @@ namespace Skincare.API.Controllers
                 return StatusCode(500, "Internal server error");
             }
         }
-
 
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateOrder(int id, [FromBody] UpdateOrderDto updateOrderDto)
@@ -114,43 +111,35 @@ namespace Skincare.API.Controllers
                 if (existingOrder == null)
                     return NotFound($"Order with ID {id} not found");
 
-                // Cập nhật thông tin đơn hàng
                 existingOrder.VoucherId = updateOrderDto.VoucherId ?? existingOrder.VoucherId;
                 existingOrder.Status = updateOrderDto.Status ?? existingOrder.Status;
                 existingOrder.TotalPrice = updateOrderDto.TotalPrice ?? existingOrder.TotalPrice;
                 existingOrder.DiscountPrice = updateOrderDto.DiscountPrice ?? existingOrder.DiscountPrice;
-                existingOrder.TotalAmount = updateOrderDto.TotalAmount ?? existingOrder.TotalAmount;
+                existingOrder.TotalAmount = ((decimal?)(updateOrderDto.TotalPrice ?? existingOrder.TotalPrice)).GetValueOrDefault() -
+                            ((decimal?)(updateOrderDto.DiscountPrice ?? existingOrder.DiscountPrice)).GetValueOrDefault();
                 existingOrder.IsPrepaid = updateOrderDto.IsPrepaid ?? existingOrder.IsPrepaid;
                 existingOrder.UpdatedAt = DateTime.UtcNow;
 
-                // Cập nhật OrderItems nếu có
                 if (updateOrderDto.OrderItems != null)
                 {
                     existingOrder.OrderItems.Clear();
-                    foreach (var item in updateOrderDto.OrderItems)
+                    existingOrder.OrderItems.AddRange(updateOrderDto.OrderItems.Select(item => new OrderItem
                     {
-                        existingOrder.OrderItems.Add(new OrderItem
-                        {
-                            ProductId = item.ProductId,
-                            ItemQuantity = item.ItemQuantity
-                        });
-                    }
+                        ProductId = item.ProductId,
+                        ItemQuantity = item.ItemQuantity
+                    }));
                 }
 
-                // Cập nhật Transactions nếu có
                 if (updateOrderDto.Transactions != null)
                 {
                     existingOrder.Transactions.Clear();
-                    foreach (var transaction in updateOrderDto.Transactions)
+                    existingOrder.Transactions.AddRange(updateOrderDto.Transactions.Select(tx => new Transaction
                     {
-                        existingOrder.Transactions.Add(new Transaction
-                        {
-                            PaymentMethod = transaction.PaymentMethod,
-                            Status = transaction.Status,
-                            Amount = transaction.Amount,
-                            CreatedDate = transaction.CreatedDate ?? DateTime.UtcNow
-                        });
-                    }
+                        PaymentMethod = tx.PaymentMethod,
+                        Status = tx.Status,
+                        Amount = tx.Amount,
+                        CreatedDate = tx.CreatedDate ?? DateTime.UtcNow
+                    }));
                 }
 
                 await _orderService.UpdateOrderAsync(existingOrder);
@@ -162,8 +151,6 @@ namespace Skincare.API.Controllers
                 return StatusCode(500, "Internal server error");
             }
         }
-
-
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteOrder(int id)

@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Skincare.BusinessObjects.Entities;
 using Skincare.Services.Interfaces;
 using System.Collections.Generic;
@@ -20,11 +21,11 @@ namespace Skincare.API.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAllProducts()
+        public async Task<IActionResult> GetAllProducts([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
         {
             try
             {
-                var products = await _productService.GetAllProductsAsync();
+                var products = await _productService.GetAllProductsAsync(pageNumber, pageSize);
                 return Ok(products);
             }
             catch (Exception ex)
@@ -41,7 +42,7 @@ namespace Skincare.API.Controllers
             {
                 var product = await _productService.GetProductByIdAsync(id);
                 if (product == null)
-                    return NotFound();
+                    return NotFound("Product not found");
 
                 return Ok(product);
             }
@@ -67,6 +68,7 @@ namespace Skincare.API.Controllers
             }
         }
 
+        [Authorize(Roles = "Admin")]
         [HttpPost]
         public async Task<IActionResult> CreateProduct([FromBody] Product product)
         {
@@ -88,6 +90,7 @@ namespace Skincare.API.Controllers
             }
         }
 
+        [Authorize(Roles = "Admin")]
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateProduct(int id, [FromBody] Product product)
         {
@@ -109,11 +112,16 @@ namespace Skincare.API.Controllers
             }
         }
 
+        [Authorize(Roles = "Admin")]
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteProduct(int id)
         {
             try
             {
+                var product = await _productService.GetProductByIdAsync(id);
+                if (product == null)
+                    return NotFound("Product not found");
+
                 await _productService.DeleteProductAsync(id);
                 return NoContent();
             }

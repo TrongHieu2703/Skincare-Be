@@ -1,106 +1,54 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Skincare.BusinessObjects.Entities;
+using Skincare.BusinessObjects.DTOs;
 using Skincare.Services.Interfaces;
-using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 
-namespace Skincare.API.Controllers
+[ApiController]
+[Route("api/[controller]")]
+public class ReviewController : ControllerBase
 {
-    [Route("api/[controller]")]
-    [ApiController]
-    public class ReviewController : ControllerBase
+    private readonly IReviewService _reviewService;
+
+    public ReviewController(IReviewService reviewService)
     {
-        private readonly IReviewService _reviewService;
-        private readonly ILogger<ReviewController> _logger;
+        _reviewService = reviewService;
+    }
 
-        public ReviewController(IReviewService reviewService, ILogger<ReviewController> logger)
-        {
-            _reviewService = reviewService;
-            _logger = logger;
-        }
+    [HttpGet("product/{productId}")]
+    public async Task<IActionResult> GetReviewsByProductId(int productId)
+    {
+        var reviews = await _reviewService.GetReviewsByProductIdAsync(productId);
+        return Ok(reviews);
+    }
 
-        [HttpGet]
-        public async Task<IActionResult> GetAllReviews()
-        {
-            try
-            {
-                var reviews = await _reviewService.GetAllReviewsAsync();
-                return Ok(reviews);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error fetching all reviews");
-                return StatusCode(500, "Internal server error");
-            }
-        }
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetReviewById(int id)
+    {
+        var review = await _reviewService.GetReviewByIdAsync(id);
+        if (review == null) return NotFound();
+        return Ok(review);
+    }
 
-        [HttpGet("{id}")]
-        public async Task<IActionResult> GetReviewById(int id)
-        {
-            try
-            {
-                var review = await _reviewService.GetReviewByIdAsync(id);
-                if (review == null)
-                    return NotFound();
+    [HttpPost]
+    public async Task<IActionResult> CreateReview([FromBody] CreateReviewDto createReviewDto)
+    {
+        var review = await _reviewService.CreateReviewAsync(createReviewDto);
+        return CreatedAtAction(nameof(GetReviewById), new { id = review.Id }, review);
+    }
 
-                return Ok(review);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error fetching review with ID {id}");
-                return StatusCode(500, "Internal server error");
-            }
-        }
+    [HttpPut("{id}")]
+    public async Task<IActionResult> UpdateReview(int id, [FromBody] UpdateReviewDto updateReviewDto)
+    {
+        var updatedReview = await _reviewService.UpdateReviewAsync(id, updateReviewDto);
+        if (updatedReview == null) return NotFound();
+        return Ok(updatedReview);
+    }
 
-        [HttpGet("product/{productId}")]
-        public async Task<IActionResult> GetReviewsByProductId(int productId)
-        {
-            try
-            {
-                var reviews = await _reviewService.GetReviewsByProductIdAsync(productId);
-                return Ok(reviews);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error fetching reviews for product ID {productId}");
-                return StatusCode(500, "Internal server error");
-            }
-        }
-
-        [HttpPost]
-        public async Task<IActionResult> AddReview([FromBody] Review review)
-        {
-            if (review == null)
-                return BadRequest("Review is null");
-
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
-
-            try
-            {
-                var createdReview = await _reviewService.AddReviewAsync(review);
-                return CreatedAtAction(nameof(GetReviewById), new { id = createdReview.Id }, createdReview);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error adding review");
-                return StatusCode(500, "Internal server error");
-            }
-        }
-
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteReview(int id)
-        {
-            try
-            {
-                await _reviewService.DeleteReviewAsync(id);
-                return NoContent();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error deleting review with ID {id}");
-                return StatusCode(500, "Internal server error");
-            }
-        }
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteReview(int id)
+    {
+        await _reviewService.DeleteReviewAsync(id);
+        return NoContent();
     }
 }

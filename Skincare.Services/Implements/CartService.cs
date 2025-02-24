@@ -18,12 +18,12 @@ namespace Skincare.Services.Implements
             _logger = logger;
         }
 
-        public async Task<IEnumerable<Cart>> GetAllCartsAsync()
+        public async Task<IEnumerable<Cart>> GetAllCartsAsync(int pageNumber, int pageSize)
         {
             try
             {
                 _logger.LogInformation("Fetching all carts.");
-                return await _cartRepository.GetAllCartsAsync();
+                return await _cartRepository.GetAllCartsAsync(pageNumber, pageSize);
             }
             catch (Exception ex)
             {

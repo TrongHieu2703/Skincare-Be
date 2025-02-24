@@ -6,11 +6,12 @@ namespace Skincare.Services.Interfaces
 {
     public interface ICartService
     {
-        Task<IEnumerable<Cart>> GetAllCartsAsync();
-        Task<Cart> GetCartByIdAsync(int cartId);
+        Task<IEnumerable<Cart>> GetAllCartsAsync(int pageNumber, int pageSize);
+        Task<Cart> GetCartByIdAsync(int id);
         Task<IEnumerable<Cart>> GetCartsByUserIdAsync(int userId);
         Task<Cart> AddCartAsync(Cart cart);
         Task UpdateCartAsync(Cart cart);
-        Task DeleteCartAsync(int cartId);
+        Task DeleteCartAsync(int id);
     }
+
 }
