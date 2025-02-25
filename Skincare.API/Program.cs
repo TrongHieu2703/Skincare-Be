@@ -6,6 +6,7 @@ using System.Text;
 using Skincare.API.Middleware;
 using System.Text.Json.Serialization;
 using Skincare.API.Configurations;
+using Microsoft.OpenApi.Models;
 
 namespace Skincare.API
 {
@@ -39,8 +40,11 @@ namespace Skincare.API
             // Đăng ký Repository và Service
             services.AddServices();
 
-            // Đọc secret key từ appsettings.json
-            var jwtKey = configuration["Jwt:Key"];
+            // Đọc cấu hình JWT từ appsettings.json
+            var jwtSettings = configuration.GetSection("Jwt");
+            var jwtKey = jwtSettings["Key"];
+            var jwtIssuer = jwtSettings["Issuer"];
+            var jwtAudience = jwtSettings["Audience"];
 
             // ✅ Thêm Authentication (JWT)
             services.AddAuthentication(options =>
@@ -54,61 +58,66 @@ namespace Skincare.API
                 {
                     ValidateIssuerSigningKey = true,
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
-                    ValidateIssuer = false,
-                    ValidateAudience = false,
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidIssuer = jwtIssuer,
+                    ValidAudience = jwtAudience,
                     ValidateLifetime = true,
                     ClockSkew = TimeSpan.Zero // Không cho phép thời gian trễ
                 };
             });
 
-            // Đăng ký Controllers và Swagger với JWT cấu hình
+            // Đăng ký Controllers và Swagger với cấu hình JSON
             services.AddControllers().AddJsonOptions(options =>
             {
                 options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+                options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
             });
 
             services.AddEndpointsApiExplorer();
+
+            // ✅ Cấu hình Swagger với Bearer Token
             services.AddSwaggerGen(options =>
             {
-                options.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+                options.SwaggerDoc("v1", new OpenApiInfo
                 {
                     Title = "Skincare API",
-                    Version = "v1"
+                    Version = "v1",
+                    Description = "API Documentation for Skincare Project"
                 });
 
-                // ✅ Cấu hình Bearer Token trong Swagger
-                options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+                // Cấu hình Bearer trong Swagger
+                options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
                 {
-                    In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-                    Description = "Nhập JWT Token vào đây, ví dụ: Bearer {token}",
+                    In = ParameterLocation.Header,
+                    Description = "Nhập JWT Token theo định dạng: Bearer {token}",
                     Name = "Authorization",
-                    Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+                    Type = SecuritySchemeType.ApiKey,
                     Scheme = "Bearer"
                 });
 
-                options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+                options.AddSecurityRequirement(new OpenApiSecurityRequirement
                 {
                     {
-                        new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+                        new OpenApiSecurityScheme
                         {
-                            Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                            Reference = new OpenApiReference
                             {
-                                Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                                Type = ReferenceType.SecurityScheme,
                                 Id = "Bearer"
                             }
                         },
-                        new string[] { }
+                        Array.Empty<string>()
                     }
                 });
             });
 
-            // Đăng ký CORS
-            var corsPolicyName = "AllowSpecificOrigins";
+            // ✅ Đăng ký CORS (cho phép từ frontend localhost:3000)
             services.AddCors(options =>
             {
-                options.AddPolicy(corsPolicyName, policy =>
+                options.AddPolicy("AllowSpecificOrigins", policy =>
                 {
-                    policy.WithOrigins("http://localhost:3000") 
+                    policy.WithOrigins("http://localhost:3000") // Thay đổi domain nếu cần
                           .AllowAnyMethod()
                           .AllowAnyHeader()
                           .AllowCredentials();
@@ -120,14 +129,18 @@ namespace Skincare.API
 
         private static void ConfigureMiddleware(WebApplication app)
         {
-            // Middleware xử lý lỗi
+            // Middleware xử lý lỗi toàn cục
             app.UseMiddleware<ExceptionMiddleware>();
 
             // Bật Swagger UI trong môi trường Development
             if (app.Environment.IsDevelopment())
             {
                 app.UseSwagger();
-                app.UseSwaggerUI();
+                app.UseSwaggerUI(c =>
+                {
+                    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Skincare API v1");
+                    c.RoutePrefix = string.Empty; // Để Swagger hiển thị tại root "/"
+                });
             }
 
             // Áp dụng CORS
@@ -138,7 +151,7 @@ namespace Skincare.API
             app.UseAuthentication();
             app.UseAuthorization();
 
-            // Middleware Chuyển Hướng đến Swagger nếu Truy Cập Root
+            // Middleware chuyển hướng về Swagger nếu truy cập root
             app.Use(async (context, next) =>
             {
                 if (context.Request.Path == "/")
