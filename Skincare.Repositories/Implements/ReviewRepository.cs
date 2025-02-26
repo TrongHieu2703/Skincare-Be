@@ -1,101 +1,109 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Skincare.BusinessObjects.DTOs;
 using Skincare.BusinessObjects.Entities;
 using Skincare.Repositories.Context;
 using Skincare.Repositories.Interfaces;
+using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
-using System;
 
-namespace Skincare.Repositories.Implements
+public class ReviewRepository : IReviewRepository
 {
-    public class ReviewRepository : IReviewRepository
+    private readonly SWP391Context _context;
+
+    public ReviewRepository(SWP391Context context)
     {
-        private readonly SWP391Context _context;
-        private readonly ILogger<ReviewRepository> _logger;
+        _context = context;
+    }
 
-        public ReviewRepository(SWP391Context context, ILogger<ReviewRepository> logger)
-        {
-            _context = context;
-            _logger = logger;
-        }
+    public async Task<IEnumerable<ReviewDto>> GetReviewsByProductIdAsync(int productId)
+    {
+        return await _context.Reviews
+            .Where(r => r.ProductId == productId)
+            .Select(r => new ReviewDto
+            {
+                Id = r.Id,
+                OrderDetailId = r.OrderDetailId,
+                CustomerId = r.CustomerId,
+                ProductId = r.ProductId,
+                Rating = r.Rating,
+                Comment = r.Comment,
+                CreatedAt = r.CreatedAt
+            })
+            .ToListAsync();
+    }
 
-        public async Task<IEnumerable<Review>> GetAllReviewsAsync()
+    public async Task<ReviewDto> GetReviewByIdAsync(int id)
+    {
+        var review = await _context.Reviews.FindAsync(id);
+        return review == null ? null : new ReviewDto
         {
-            try
-            {
-                _logger.LogInformation("Fetching all reviews.");
-                return await _context.Reviews.ToListAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "An error occurred while fetching all reviews.");
-                throw;
-            }
-        }
+            Id = review.Id,
+            OrderDetailId = review.OrderDetailId,
+            CustomerId = review.CustomerId,
+            ProductId = review.ProductId,
+            Rating = review.Rating,
+            Comment = review.Comment,
+            CreatedAt = review.CreatedAt
+        };
+    }
 
-        public async Task<IEnumerable<Review>> GetByProductIdAsync(int productId)
+    public async Task<ReviewDto> CreateReviewAsync(CreateReviewDto createReviewDto)
+    {
+        var review = new Review
         {
-            try
-            {
-                _logger.LogInformation($"Fetching reviews for product ID: {productId}");
-                return await _context.Reviews.Where(r => r.ProductId == productId).ToListAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"An error occurred while fetching reviews for product ID: {productId}");
-                throw;
-            }
-        }
+            OrderDetailId = createReviewDto.OrderDetailId,
+            CustomerId = createReviewDto.CustomerId,
+            ProductId = createReviewDto.ProductId,
+            Rating = createReviewDto.Rating,
+            Comment = createReviewDto.Comment,
+            CreatedAt = DateTime.UtcNow
+        };
 
-        public async Task<Review> GetReviewByIdAsync(int id)
-        {
-            try
-            {
-                _logger.LogInformation($"Fetching review with ID: {id}");
-                return await _context.Reviews.FindAsync(id);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"An error occurred while fetching review with ID: {id}");
-                throw;
-            }
-        }
+        _context.Reviews.Add(review);
+        await _context.SaveChangesAsync();
 
-        public async Task<Review> AddReviewAsync(Review review)
+        return new ReviewDto
         {
-            try
-            {
-                _logger.LogInformation("Adding a new review.");
-                await _context.Reviews.AddAsync(review);
-                await _context.SaveChangesAsync();
-                return review;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "An error occurred while adding a new review.");
-                throw;
-            }
-        }
+            Id = review.Id,
+            OrderDetailId = review.OrderDetailId,
+            CustomerId = review.CustomerId,
+            ProductId = review.ProductId,
+            Rating = review.Rating,
+            Comment = review.Comment,
+            CreatedAt = review.CreatedAt
+        };
+    }
 
-        public async Task DeleteReviewAsync(int id)
+    public async Task<ReviewDto> UpdateReviewAsync(int id, UpdateReviewDto updateReviewDto)
+    {
+        var review = await _context.Reviews.FindAsync(id);
+        if (review == null) return null;
+
+        review.Rating = updateReviewDto.Rating ?? review.Rating;
+        review.Comment = updateReviewDto.Comment ?? review.Comment;
+
+        await _context.SaveChangesAsync();
+
+        return new ReviewDto
         {
-            try
-            {
-                _logger.LogInformation($"Deleting review with ID: {id}");
-                var review = await _context.Reviews.FindAsync(id);
-                if (review != null)
-                {
-                    _context.Reviews.Remove(review);
-                    await _context.SaveChangesAsync();
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"An error occurred while deleting review with ID: {id}");
-                throw;
-            }
+            Id = review.Id,
+            OrderDetailId = review.OrderDetailId,
+            CustomerId = review.CustomerId,
+            ProductId = review.ProductId,
+            Rating = review.Rating,
+            Comment = review.Comment,
+            CreatedAt = review.CreatedAt
+        };
+    }
+
+    public async Task DeleteReviewAsync(int id)
+    {
+        var review = await _context.Reviews.FindAsync(id);
+        if (review != null)
+        {
+            _context.Reviews.Remove(review);
+            await _context.SaveChangesAsync();
         }
     }
 }

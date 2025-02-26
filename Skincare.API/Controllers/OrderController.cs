@@ -1,4 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using NuGet.Packaging;
+using Skincare.BusinessObjects.DTOs;
 using Skincare.BusinessObjects.Entities;
 using Skincare.Services.Interfaces;
 using System.Collections.Generic;
@@ -53,17 +55,41 @@ namespace Skincare.API.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> CreateOrder([FromBody] Order order)
+        public async Task<IActionResult> CreateOrder([FromBody] CreateOrderDto createOrderDto)
         {
-            if (order == null)
-                return BadRequest("Order is null");
+            if (createOrderDto == null)
+                return BadRequest("Order data is null");
 
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
             try
             {
-                var createdOrder = await _orderService.CreateOrderAsync(order);
+                var newOrder = new Order
+                {
+                    CustomerId = createOrderDto.CustomerId,
+                    VoucherId = createOrderDto.VoucherId,
+                    TotalPrice = createOrderDto.TotalPrice,
+                    DiscountPrice = createOrderDto.DiscountPrice,
+                    TotalAmount = createOrderDto.TotalPrice - (createOrderDto.DiscountPrice ?? 0),
+                    IsPrepaid = createOrderDto.IsPrepaid,
+                    Status = createOrderDto.Status,
+                    UpdatedAt = DateTime.UtcNow,
+                    OrderItems = createOrderDto.OrderItems.Select(item => new OrderItem
+                    {
+                        ProductId = item.ProductId,
+                        ItemQuantity = item.ItemQuantity
+                    }).ToList(),
+                    Transactions = createOrderDto.Transactions.Select(tx => new Transaction
+                    {
+                        PaymentMethod = tx.PaymentMethod,
+                        Status = tx.Status,
+                        Amount = tx.Amount,
+                        CreatedDate = tx.CreatedDate ?? DateTime.UtcNow
+                    }).ToList()
+                };
+
+                var createdOrder = await _orderService.CreateOrderAsync(newOrder);
                 return CreatedAtAction(nameof(GetOrderById), new { id = createdOrder.Id }, createdOrder);
             }
             catch (Exception ex)
@@ -74,18 +100,50 @@ namespace Skincare.API.Controllers
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateOrder(int id, [FromBody] Order order)
+        public async Task<IActionResult> UpdateOrder(int id, [FromBody] UpdateOrderDto updateOrderDto)
         {
-            if (order == null || order.Id != id)
-                return BadRequest("Order ID mismatch");
-
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
+            if (updateOrderDto == null)
+                return BadRequest("Update data is null");
 
             try
             {
-                await _orderService.UpdateOrderAsync(order);
-                return NoContent();
+                var existingOrder = await _orderService.GetOrderByIdAsync(id);
+                if (existingOrder == null)
+                    return NotFound($"Order with ID {id} not found");
+
+                existingOrder.VoucherId = updateOrderDto.VoucherId ?? existingOrder.VoucherId;
+                existingOrder.Status = updateOrderDto.Status ?? existingOrder.Status;
+                existingOrder.TotalPrice = updateOrderDto.TotalPrice ?? existingOrder.TotalPrice;
+                existingOrder.DiscountPrice = updateOrderDto.DiscountPrice ?? existingOrder.DiscountPrice;
+                existingOrder.TotalAmount = ((decimal?)(updateOrderDto.TotalPrice ?? existingOrder.TotalPrice)).GetValueOrDefault() -
+                            ((decimal?)(updateOrderDto.DiscountPrice ?? existingOrder.DiscountPrice)).GetValueOrDefault();
+                existingOrder.IsPrepaid = updateOrderDto.IsPrepaid ?? existingOrder.IsPrepaid;
+                existingOrder.UpdatedAt = DateTime.UtcNow;
+
+                if (updateOrderDto.OrderItems != null)
+                {
+                    existingOrder.OrderItems.Clear();
+                    existingOrder.OrderItems.AddRange(updateOrderDto.OrderItems.Select(item => new OrderItem
+                    {
+                        ProductId = item.ProductId,
+                        ItemQuantity = item.ItemQuantity
+                    }));
+                }
+
+                if (updateOrderDto.Transactions != null)
+                {
+                    existingOrder.Transactions.Clear();
+                    existingOrder.Transactions.AddRange(updateOrderDto.Transactions.Select(tx => new Transaction
+                    {
+                        PaymentMethod = tx.PaymentMethod,
+                        Status = tx.Status,
+                        Amount = tx.Amount,
+                        CreatedDate = tx.CreatedDate ?? DateTime.UtcNow
+                    }));
+                }
+
+                await _orderService.UpdateOrderAsync(existingOrder);
+                return Ok(existingOrder);
             }
             catch (Exception ex)
             {

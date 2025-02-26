@@ -20,11 +20,15 @@ namespace Skincare.Repositories.Implements
             _logger = logger;
         }
 
-        public async Task<IEnumerable<Product>> GetAllProductsAsync()
+        public async Task<IEnumerable<Product>> GetAllProductsAsync(int pageNumber, int pageSize)
         {
             try
             {
-                return await _context.Products.ToListAsync();
+                return await _context.Products
+                    .AsNoTracking()
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync();
             }
             catch (Exception ex)
             {
@@ -37,7 +41,7 @@ namespace Skincare.Repositories.Implements
         {
             try
             {
-                return await _context.Products.FindAsync(id);
+                return await _context.Products.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id);
             }
             catch (Exception ex)
             {
@@ -50,7 +54,10 @@ namespace Skincare.Repositories.Implements
         {
             try
             {
-                return await _context.Products.Where(p => p.ProductTypeId == productTypeId).ToListAsync();
+                return await _context.Products
+                    .AsNoTracking()
+                    .Where(p => p.ProductTypeId == productTypeId)
+                    .ToListAsync();
             }
             catch (Exception ex)
             {
@@ -105,5 +112,7 @@ namespace Skincare.Repositories.Implements
                 throw;
             }
         }
+
+       
     }
 }

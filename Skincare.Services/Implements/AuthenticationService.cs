@@ -3,6 +3,7 @@ using Skincare.Services.Interfaces;
 using Skincare.Repositories.Interfaces;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
 using System.Security.Cryptography;
 using System.Text;
 using Skincare.BusinessObjects.Entities;
@@ -17,41 +18,37 @@ namespace Skincare.Services.Implements
     {
         private readonly IAccountRepository _accountRepository;
         private readonly ILogger<AuthenticationService> _logger;
+        private readonly IConfiguration _configuration;
+        private readonly IEmailService _emailService;
 
-        // Secret Key dùng để ký JWT (nên lưu trong file cấu hình)
-        private readonly string _jwtSecret = "your_secret_key_here"; // ✅ Replace with real key
-
-        public AuthenticationService(IAccountRepository accountRepository, ILogger<AuthenticationService> logger)
+        public AuthenticationService(IAccountRepository accountRepository, ILogger<AuthenticationService> logger, IConfiguration configuration, IEmailService emailService)
         {
             _accountRepository = accountRepository;
             _logger = logger;
+            _configuration = configuration;
+            _emailService = emailService;
         }
 
         public async Task<LoginResponse> LoginAsync(LoginRequest loginRequest)
         {
             try
             {
-                _logger.LogInformation($"Attempting to log in user with email: {loginRequest.Email}");
+                _logger.LogInformation($"Attempting login for: {loginRequest.Email}");
                 var account = await _accountRepository.GetByEmailAsync(loginRequest.Email);
 
                 if (account == null || !VerifyPasswordHash(loginRequest.Password, account.PasswordHash))
                 {
-                    _logger.LogWarning($"Login failed for user with email: {loginRequest.Email}");
+                    _logger.LogWarning("Invalid login attempt");
                     return null;
                 }
 
-                // Gán giá trị mặc định cho các trường có thể null
-                account.Username = account.Username ?? string.Empty;
-                account.Address = account.Address ?? string.Empty;
-                account.Avatar = account.Avatar ?? string.Empty;
-                account.PhoneNumber = account.PhoneNumber ?? string.Empty;
-                account.Status = account.Status ?? string.Empty;
-                account.Role = account.Role ?? "User";
-
-                // ✅ Generate JWT token
                 var token = GenerateJwtToken(account);
+                var refreshToken = GenerateRefreshToken();
 
-                _logger.LogInformation($"User logged in successfully with email: {loginRequest.Email}");
+                // Save refresh token
+                account.RefreshToken = refreshToken;
+                account.RefreshTokenExpiry = DateTime.UtcNow.AddDays(7);
+                await _accountRepository.UpdateAccountAsync(account);
 
                 return new LoginResponse
                 {
@@ -59,12 +56,13 @@ namespace Skincare.Services.Implements
                     Role = account.Role,
                     Username = account.Username,
                     Expiration = DateTime.UtcNow.AddHours(2),
+                    RefreshToken = refreshToken,
                     Message = "Login successful"
                 };
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"An error occurred while logging in user with email: {loginRequest.Email}");
+                _logger.LogError(ex, "Login failed");
                 throw;
             }
         }
@@ -73,71 +71,144 @@ namespace Skincare.Services.Implements
         {
             try
             {
-                _logger.LogInformation($"Attempting to register user with email: {registerRequest.Email}");
-
                 var existingAccount = await _accountRepository.GetByEmailAsync(registerRequest.Email);
                 if (existingAccount != null)
                 {
-                    _logger.LogWarning($"Registration failed. User with email: {registerRequest.Email} already exists.");
+                    _logger.LogWarning("Email already registered");
                     return false;
                 }
 
-                var account = new Account
+                var newAccount = new Account
                 {
                     Username = registerRequest.Username,
                     Email = registerRequest.Email,
                     PasswordHash = CreatePasswordHash(registerRequest.Password),
-                    Role = "User", // ✅ Default role
+                    Role = "User",
                     CreatedAt = DateTime.UtcNow
                 };
 
-                await _accountRepository.CreateAccountAsync(account);
-                _logger.LogInformation($"User registered successfully with email: {registerRequest.Email}");
+                await _accountRepository.CreateAccountAsync(newAccount);
                 return true;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"An error occurred while registering user with email: {registerRequest.Email}");
+                _logger.LogError(ex, "Registration failed");
                 throw;
             }
         }
 
-        // ✅ Hash Password using BCrypt
-        private string CreatePasswordHash(string password)
+        public async Task<LoginResponse> RefreshTokenAsync(RefreshTokenRequest refreshTokenRequest)
         {
-            return BCrypt.Net.BCrypt.HashPassword(password);
+            var account = await _accountRepository.GetByRefreshTokenAsync(refreshTokenRequest.RefreshToken);
+
+            if (account == null || account.RefreshTokenExpiry < DateTime.UtcNow)
+            {
+                _logger.LogWarning("Invalid or expired refresh token");
+                return null;
+            }
+
+            var newJwtToken = GenerateJwtToken(account);
+            var newRefreshToken = GenerateRefreshToken();
+
+            account.RefreshToken = newRefreshToken;
+            account.RefreshTokenExpiry = DateTime.UtcNow.AddDays(7);
+            await _accountRepository.UpdateAccountAsync(account);
+
+            return new LoginResponse
+            {
+                Token = newJwtToken,
+                Role = account.Role,
+                Username = account.Username,
+                Expiration = DateTime.UtcNow.AddHours(2),
+                RefreshToken = newRefreshToken,
+                Message = "Token refreshed successfully"
+            };
         }
 
-        // ✅ Verify Password using BCrypt
-        private bool VerifyPasswordHash(string password, string storedHash)
+        public async Task<bool> ForgotPasswordAsync(ForgotPasswordRequest request)
         {
-            return BCrypt.Net.BCrypt.Verify(password, storedHash);
+            var account = await _accountRepository.GetByEmailAsync(request.Email);
+            if (account == null)
+            {
+                _logger.LogWarning("Email not found for password reset");
+                return false;
+            }
+
+            var otp = GenerateOtp();
+            account.OtpCode = otp;
+            account.OtpExpiry = DateTime.UtcNow.AddMinutes(10);
+            await _accountRepository.UpdateAccountAsync(account);
+
+            // TODO: Send OTP to email
+            var emailSubject = "Your Password Reset OTP";
+            var emailBody = $"Your OTP code is {otp}. It is valid for 10 minutes.";
+            await _emailService.SendEmailAsync(account.Email, emailSubject, emailBody);
+
+            _logger.LogInformation($"OTP sent to {request.Email}: {otp}");
+
+            return true;
         }
 
-        // ✅ JWT Token Generation (Updated)
+        public async Task<bool> ResetPasswordAsync(ResetPasswordRequest request)
+        {
+            var account = await _accountRepository.GetByEmailAsync(request.Email);
+
+            if (account == null || account.OtpCode != request.OtpCode || account.OtpExpiry < DateTime.UtcNow)
+            {
+                _logger.LogWarning("Invalid OTP or email for password reset");
+                return false;
+            }
+
+            account.PasswordHash = CreatePasswordHash(request.NewPassword);
+            account.OtpCode = null;
+            account.OtpExpiry = null;
+            await _accountRepository.UpdateAccountAsync(account);
+
+            return true;
+        }
+
+        private string CreatePasswordHash(string password) => BCrypt.Net.BCrypt.HashPassword(password);
+
+        private bool VerifyPasswordHash(string password, string storedHash) => BCrypt.Net.BCrypt.Verify(password, storedHash);
+
         private string GenerateJwtToken(Account account)
         {
             var tokenHandler = new JwtSecurityTokenHandler();
-            var key = Encoding.UTF8.GetBytes("mjRqNXAsz/VWrs8FrPpHiLf4byuGEkBdv0WohkODuv4="
-);
+            var key = Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]);
 
             var claims = new[]
             {
-                new Claim(ClaimTypes.NameIdentifier, account.Id.ToString()), // 🆔 User ID
-                new Claim(ClaimTypes.Name, account.Username),               // 👤 Username
-                new Claim(ClaimTypes.Email, account.Email),                 // 📧 Email
-                new Claim(ClaimTypes.Role, account.Role)                    // 🛡️ Role
-            };
+            new Claim(ClaimTypes.NameIdentifier, account.Id.ToString()),
+            new Claim(ClaimTypes.Name, account.Username),
+            new Claim(ClaimTypes.Email, account.Email),
+            new Claim(ClaimTypes.Role, account.Role)
+        };
 
             var tokenDescriptor = new SecurityTokenDescriptor
             {
                 Subject = new ClaimsIdentity(claims),
-                Expires = DateTime.UtcNow.AddHours(2), // ⏰ Token valid for 2 hours
+                Expires = DateTime.UtcNow.AddHours(2),
                 SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
             };
 
             var token = tokenHandler.CreateToken(tokenDescriptor);
             return tokenHandler.WriteToken(token);
+        }
+
+        private string GenerateRefreshToken()
+        {
+            var randomBytes = new byte[64];
+            using (var rng = RandomNumberGenerator.Create())
+            {
+                rng.GetBytes(randomBytes);
+                return Convert.ToBase64String(randomBytes);
+            }
+        }
+
+        private string GenerateOtp()
+        {
+            var random = new Random();
+            return random.Next(100000, 999999).ToString();
         }
     }
 }

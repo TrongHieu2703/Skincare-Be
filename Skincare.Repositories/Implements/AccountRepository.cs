@@ -20,6 +20,13 @@ namespace Skincare.Repositories.Implements
             _logger = logger;
         }
 
+        public async Task<Account> GetByRefreshTokenAsync(string refreshToken)
+        {
+            return await _context.Accounts
+                .FirstOrDefaultAsync(a => a.RefreshToken == refreshToken);
+        }
+
+
         public async Task<IEnumerable<Account>> GetAllAccountsAsync()
         {
             try

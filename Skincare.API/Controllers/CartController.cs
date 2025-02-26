@@ -20,11 +20,11 @@ namespace Skincare.API.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAllCarts()
+        public async Task<IActionResult> GetAllCarts([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
         {
             try
             {
-                var carts = await _cartService.GetAllCartsAsync();
+                var carts = await _cartService.GetAllCartsAsync(pageNumber, pageSize);
                 return Ok(carts);
             }
             catch (Exception ex)

@@ -1,8 +1,8 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-using Skincare.Services.Interfaces;
-using Skincare.Services.Implements;
-using Skincare.Repositories.Interfaces;
+﻿// DependencyInjection.cs
 using Skincare.Repositories.Implements;
+using Skincare.Repositories.Interfaces;
+using Skincare.Services.Implements;
+using Skincare.Services.Interfaces;
 
 namespace Skincare.API.Configurations
 {
@@ -23,6 +23,9 @@ namespace Skincare.API.Configurations
             services.AddScoped<IProductRepository, ProductRepository>();
             services.AddScoped<IReviewRepository, ReviewRepository>();
             services.AddScoped<IAuthenticationRepository, AuthenticationRepository>();
+
+            // === Đăng ký IEmailService (bạn thêm dòng này!) ===
+            services.AddScoped<IEmailService, EmailService>();
         }
     }
 }

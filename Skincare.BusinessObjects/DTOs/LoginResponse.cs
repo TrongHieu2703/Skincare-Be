@@ -2,10 +2,11 @@
 {
     public class LoginResponse
     {
-        public string Token { get; set; }         // 🔑 JWT Access Token
-        public string Role { get; set; }          // 🛡️ User Role
-        public string Username { get; set; }      // 👤 Username for Navbar
-        public DateTime Expiration { get; set; }  // ⏰ Token Expiration
-        public string Message { get; set; }       // 📨 Custom message (e.g., "Login successful")
+        public string Token { get; set; }        
+        public string Role { get; set; }         
+        public string Username { get; set; }      
+        public DateTime Expiration { get; set; }  
+        public string Message { get; set; }
+        public string RefreshToken { get; set; }
     }
 }
