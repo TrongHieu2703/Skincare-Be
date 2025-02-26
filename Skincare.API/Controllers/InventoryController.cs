@@ -29,14 +29,14 @@ namespace Skincare.API.Controllers
         public async Task<IActionResult> CreateInventory([FromBody] CreateInventoryDto dto)
         {
             var inventory = await _inventoryService.CreateInventoryAsync(dto);
-            return CreatedAtAction(nameof(GetInventoryById), new { id = inventory.InventoryId }, inventory);
+            return CreatedAtAction(nameof(GetInventoryById), new { id = inventory.Id }, inventory);
         }
 
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateInventory(int id, [FromBody] UpdateInventoryDto dto)
         {
             var updatedInventory = await _inventoryService.UpdateInventoryAsync(id, dto);
-            return Ok(updatedInventory);
+            return updatedInventory != null ? Ok(updatedInventory) : NotFound();
         }
 
         [HttpDelete("{id}")]

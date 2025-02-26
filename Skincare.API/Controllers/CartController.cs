@@ -1,13 +1,17 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Skincare.BusinessObjects.Entities;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Skincare.BusinessObjects.DTOs;
 using Skincare.Services.Interfaces;
-using System.Collections.Generic;
+using Microsoft.Extensions.Logging;
+using System;
+using System.Security.Claims;
 using System.Threading.Tasks;
 
 namespace Skincare.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize] // Yêu cầu xác thực JWT
     public class CartController : ControllerBase
     {
         private readonly ICartService _cartService;
@@ -41,7 +45,7 @@ namespace Skincare.API.Controllers
             {
                 var cart = await _cartService.GetCartByIdAsync(id);
                 if (cart == null)
-                    return NotFound();
+                    return NotFound("Cart not found");
 
                 return Ok(cart);
             }
@@ -52,33 +56,38 @@ namespace Skincare.API.Controllers
             }
         }
 
-        [HttpGet("user/{userId}")]
-        public async Task<IActionResult> GetCartsByUserId(int userId)
+        [HttpGet("user")]
+        public async Task<IActionResult> GetCartsByUserId()
         {
             try
             {
+                var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!int.TryParse(userIdString, out var userId))
+                    return Unauthorized("Invalid user token");
+
                 var carts = await _cartService.GetCartsByUserIdAsync(userId);
                 return Ok(carts);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error fetching carts for user ID {userId}");
+                _logger.LogError(ex, "Error fetching carts for user");
                 return StatusCode(500, "Internal server error");
             }
         }
 
         [HttpPost]
-        public async Task<IActionResult> AddCart([FromBody] Cart cart)
+        public async Task<IActionResult> AddCart([FromBody] AddToCartDTO dto)
         {
-            if (cart == null)
-                return BadRequest("Cart is null");
-
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
+            var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!int.TryParse(userIdString, out var userId))
+                return Unauthorized("Invalid user token");
+
             try
             {
-                var createdCart = await _cartService.AddCartAsync(cart);
+                var createdCart = await _cartService.AddCartAsync(dto, userId);
                 return CreatedAtAction(nameof(GetCartById), new { id = createdCart.CartId }, createdCart);
             }
             catch (Exception ex)
@@ -89,18 +98,21 @@ namespace Skincare.API.Controllers
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateCart(int id, [FromBody] Cart cart)
+        public async Task<IActionResult> UpdateCart(int id, [FromBody] UpdateCartDTO dto)
         {
-            if (cart == null || cart.CartId != id)
-                return BadRequest("Cart ID mismatch");
-
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
+            if (id != dto.CartId)
+                return BadRequest("Cart ID mismatch");
+
             try
             {
-                await _cartService.UpdateCartAsync(cart);
-                return NoContent();
+                var updatedCart = await _cartService.UpdateCartAsync(dto);
+                if (updatedCart == null)
+                    return NotFound("Cart not found");
+
+                return Ok(updatedCart);
             }
             catch (Exception ex)
             {

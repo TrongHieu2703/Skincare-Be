@@ -10,7 +10,7 @@ namespace Skincare.Repositories.Interfaces
         Task<Cart> GetCartByIdAsync(int id);
         Task<IEnumerable<Cart>> GetCartsByUserIdAsync(int userId);
         Task<Cart> AddCartAsync(Cart cart);
-        Task UpdateCartAsync(Cart cart);
-        Task DeleteCartAsync(int id);
+        Task<Cart> UpdateCartAsync(Cart cart);
+        Task<bool> DeleteCartAsync(int id);
     }
 }

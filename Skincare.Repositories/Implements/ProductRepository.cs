@@ -2,117 +2,121 @@
 using Skincare.BusinessObjects.Entities;
 using Skincare.Repositories.Context;
 using Skincare.Repositories.Interfaces;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
+using Skincare.BusinessObjects.DTOs;
 
 namespace Skincare.Repositories.Implements
 {
     public class ProductRepository : IProductRepository
     {
         private readonly SWP391Context _context;
-        private readonly ILogger<ProductRepository> _logger;
 
-        public ProductRepository(SWP391Context context, ILogger<ProductRepository> logger)
+        public ProductRepository(SWP391Context context)
         {
             _context = context;
-            _logger = logger;
         }
 
         public async Task<IEnumerable<Product>> GetAllProductsAsync(int pageNumber, int pageSize)
         {
-            try
-            {
-                return await _context.Products
-                    .AsNoTracking()
-                    .Skip((pageNumber - 1) * pageSize)
-                    .Take(pageSize)
-                    .ToListAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error fetching all products");
-                throw;
-            }
+            return await _context.Products
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
         }
 
         public async Task<Product> GetProductByIdAsync(int id)
         {
-            try
-            {
-                return await _context.Products.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error fetching product with ID {id}");
-                throw;
-            }
+            return await _context.Products
+                .Include(p => p.ProductType) // Include ProductType
+                .Include(p => p.ProductBrand) // Include ProductBrand
+                .Include(p => p.ProductSkinTypes) // Include ProductSkinTypes
+                    .ThenInclude(pst => pst.SkinType) // Include SkinType
+                .FirstOrDefaultAsync(p => p.Id == id);
+        }
+
+        public async Task<IEnumerable<Product>> FilterProductsAsync(string category, bool? inStock, decimal? minPrice, decimal? maxPrice)
+        {
+            var query = _context.Products
+                .Include(p => p.ProductType) // Include ProductType
+                .Include(p => p.ProductBrand) // Include ProductBrand
+                .Include(p => p.ProductSkinTypes) // Include ProductSkinTypes
+                    .ThenInclude(pst => pst.SkinType) // Include SkinType
+                .AsQueryable();
+
+            if (!string.IsNullOrEmpty(category))
+                query = query.Where(p => p.ProductType.Name == category);
+
+            if (inStock.HasValue)
+                query = query.Where(p => p.Inventories.Sum(i => i.Quantity) > 0 == inStock.Value);
+
+            if (minPrice.HasValue)
+                query = query.Where(p => p.Price >= minPrice.Value);
+
+            if (maxPrice.HasValue)
+                query = query.Where(p => p.Price <= maxPrice.Value);
+
+            return await query.ToListAsync();
+        }
+
+        public async Task<IEnumerable<Product>> SearchProductsAsync(string keyword)
+        {
+            return await _context.Products
+                .Include(p => p.ProductType) // Include ProductType
+                .Include(p => p.ProductBrand) // Include ProductBrand
+                .Include(p => p.ProductSkinTypes) // Include ProductSkinTypes
+                    .ThenInclude(pst => pst.SkinType) // Include SkinType
+                .Where(p => p.Name.Contains(keyword) || p.Description.Contains(keyword))
+                .ToListAsync();
         }
 
         public async Task<IEnumerable<Product>> GetByTypeAsync(int productTypeId)
         {
-            try
-            {
-                return await _context.Products
-                    .AsNoTracking()
-                    .Where(p => p.ProductTypeId == productTypeId)
-                    .ToListAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error fetching products for type ID {productTypeId}");
-                throw;
-            }
+            return await _context.Products
+                .Where(p => p.ProductTypeId == productTypeId)
+                .ToListAsync();
         }
 
-        public async Task<Product> CreateProductAsync(Product product)
+        public async Task<Product> CreateProductAsync(CreateProductDto createProductDto)
         {
-            try
+            var product = new Product
             {
-                _context.Products.Add(product);
-                await _context.SaveChangesAsync();
-                return product;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error creating product");
-                throw;
-            }
+                Name = createProductDto.Name,
+                Description = createProductDto.Description,
+                Price = createProductDto.Price,
+                ProductTypeId = createProductDto.ProductTypeId,
+                IsAvailable = createProductDto.IsAvailable
+            };
+            _context.Products.Add(product);
+            await _context.SaveChangesAsync();
+            return product;
         }
 
-        public async Task UpdateProductAsync(Product product)
+        public async Task<Product> UpdateProductAsync(int id, UpdateProductDto updateProductDto)
         {
-            try
+            var product = await _context.Products.FindAsync(id);
+            if (product == null)
             {
-                _context.Products.Update(product);
-                await _context.SaveChangesAsync();
+                return null;
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error updating product with ID {product.Id}");
-                throw;
-            }
+
+            product.Name = updateProductDto.Name ?? product.Name;
+            product.Description = updateProductDto.Description ?? product.Description;
+            product.Price = updateProductDto.Price ?? product.Price;
+            product.ProductTypeId = updateProductDto.ProductTypeId ?? product.ProductTypeId;
+            product.IsAvailable = updateProductDto.IsAvailable ?? product.IsAvailable;
+
+            _context.Products.Update(product);
+            await _context.SaveChangesAsync();
+            return product;
         }
 
         public async Task DeleteProductAsync(int id)
         {
-            try
+            var product = await _context.Products.FindAsync(id);
+            if (product != null)
             {
-                var product = await _context.Products.FindAsync(id);
-                if (product != null)
-                {
-                    _context.Products.Remove(product);
-                    await _context.SaveChangesAsync();
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error deleting product with ID {id}");
-                throw;
+                _context.Products.Remove(product);
+                await _context.SaveChangesAsync();
             }
         }
-
-       
     }
 }

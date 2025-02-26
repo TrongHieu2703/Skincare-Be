@@ -1,10 +1,11 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using Skincare.BusinessObjects.DTOs;
 using Skincare.BusinessObjects.Entities;
 using Skincare.Repositories.Interfaces;
 using Skincare.Services.Interfaces;
+using Microsoft.Extensions.Logging;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
-using System;
 
 namespace Skincare.Services.Implements
 {
@@ -19,29 +20,34 @@ namespace Skincare.Services.Implements
             _logger = logger;
         }
 
-        public async Task<IEnumerable<Product>> GetAllProductsAsync(int pageNumber, int pageSize)
+        public async Task<IEnumerable<ProductDTO>> GetAllProductsAsync(int pageNumber, int pageSize)
         {
-            return await _productRepository.GetAllProductsAsync(pageNumber, pageSize);
+            var products = await _productRepository.GetAllProductsAsync(pageNumber, pageSize);
+            return products.Select(MapToDto).ToList();
         }
 
-        public async Task<Product> GetProductByIdAsync(int id)
+        public async Task<ProductDTO> GetProductByIdAsync(int id)
         {
-            return await _productRepository.GetProductByIdAsync(id);
+            var product = await _productRepository.GetProductByIdAsync(id);
+            return product != null ? MapToDto(product) : null;
         }
 
-        public async Task<IEnumerable<Product>> GetByTypeAsync(int productTypeId)
+        public async Task<IEnumerable<ProductDTO>> GetByTypeAsync(int productTypeId)
         {
-            return await _productRepository.GetByTypeAsync(productTypeId);
+            var products = await _productRepository.GetByTypeAsync(productTypeId);
+            return products.Select(MapToDto).ToList();
         }
 
-        public async Task<Product> CreateProductAsync(Product product)
+        public async Task<ProductDTO> CreateProductAsync(CreateProductDto createProductDto)
         {
-            return await _productRepository.CreateProductAsync(product);
+            var product = await _productRepository.CreateProductAsync(createProductDto);
+            return MapToDto(product);
         }
 
-        public async Task UpdateProductAsync(Product product)
+        public async Task<ProductDTO> UpdateProductAsync(int id, UpdateProductDto updateProductDto)
         {
-            await _productRepository.UpdateProductAsync(product);
+            var product = await _productRepository.UpdateProductAsync(id, updateProductDto);
+            return product != null ? MapToDto(product) : null;
         }
 
         public async Task DeleteProductAsync(int id)
@@ -49,6 +55,23 @@ namespace Skincare.Services.Implements
             await _productRepository.DeleteProductAsync(id);
         }
 
-
+        private ProductDTO MapToDto(Product product)
+        {
+            return new ProductDTO
+            {
+                Id = product.Id,
+                Name = product.Name,
+                Description = product.Description,
+                Price = product.Price,
+                Image = product.Image,
+                IsAvailable = product.IsAvailable,               
+                ProductTypeName = product.ProductType?.Name,
+                ProductBrandName = product.ProductBrand?.Name,
+                SkinTypes = product.ProductSkinTypes?
+                    .Where(pst => pst.SkinType != null)
+                    .Select(pst => pst.SkinType.Name)
+                    .ToList() ?? new List<string>()
+            };
+        }
     }
 }

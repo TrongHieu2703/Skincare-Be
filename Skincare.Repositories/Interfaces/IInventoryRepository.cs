@@ -1,12 +1,17 @@
 ﻿using Skincare.BusinessObjects.DTOs;
+using Skincare.BusinessObjects.Entities;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-public interface IInventoryRepository
+namespace Skincare.Repositories.Interfaces
 {
-    Task<IEnumerable<InventoryDto>> GetAllInventoriesAsync();
-    Task<InventoryDto> GetInventoryByIdAsync(int id);
-    Task<InventoryDto> CreateInventoryAsync(CreateInventoryDto createInventoryDto);
-    Task<InventoryDto> UpdateInventoryAsync(int id, UpdateInventoryDto updateInventoryDto);
-    Task DeleteInventoryAsync(int id);
+    public interface IInventoryRepository
+    {
+        Task<IEnumerable<Inventory>> GetAllInventoryAsync();
+        Task<Inventory> GetInventoryByIdAsync(int id);
+        Task<bool> CheckStockAvailability(int productId, int quantity);
+        Task<Inventory> UpdateInventoryAsync(Inventory inventory);
+        Task<Inventory> CreateInventoryAsync(CreateInventoryDto createInventoryDto); 
+        Task DeleteInventoryAsync(int id); 
+    }
 }

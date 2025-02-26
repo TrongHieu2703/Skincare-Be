@@ -12,11 +12,15 @@ namespace Skincare.BusinessObjects.Entities
         public bool IsAvailable { get; set; }
         public int ProductTypeId { get; set; }
         public int ProductBrandId { get; set; }
+        public int CategoryId { get; set; }
+
+        public virtual Inventory Inventory { get; set; }
+        public virtual ProductType ProductType { get; set; }
+        public virtual Branch ProductBrand { get; set; }
         public virtual ICollection<Cart> Carts { get; set; } = new List<Cart>();
         public virtual ICollection<Inventory> Inventories { get; set; } = new List<Inventory>();
         public virtual ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
-        public virtual Branch ProductBrand { get; set; }
         public virtual ICollection<ProductSkinType> ProductSkinTypes { get; set; } = new List<ProductSkinType>();
-        public virtual ProductType ProductType { get; set; }
     }
+
 }

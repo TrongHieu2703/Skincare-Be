@@ -1,9 +1,12 @@
-﻿using Skincare.BusinessObjects.Entities;
-using Skincare.Services.Interfaces;
+﻿using Skincare.BusinessObjects.DTOs;
+using Skincare.BusinessObjects.Entities;
 using Skincare.Repositories.Interfaces;
-using System.Collections.Generic;
-using System.Threading.Tasks;
+using Skincare.Services.Interfaces;
 using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace Skincare.Services.Implements
 {
@@ -11,6 +14,28 @@ namespace Skincare.Services.Implements
     {
         private readonly ICartRepository _cartRepository;
         private readonly ILogger<CartService> _logger;
+        private CartDTO MapCartToDTO(Cart cart)
+        {
+            if (cart == null) return null;
+
+            return new CartDTO
+            {
+                CartId = cart.CartId,
+                UserId = cart.UserId,
+                ProductId = cart.ProductId,
+                Quantity = cart.Quantity,
+                AddedDate = cart.AddedDate,
+                Product = cart.Product == null ? null : new ProductDTO
+                {
+                    Id = cart.Product.Id,
+                    Name = cart.Product.Name,
+                    Price = cart.Product.Price,
+                    Description = cart.Product.Description,
+                    Image = cart.Product.Image,
+                    IsAvailable = cart.Product.IsAvailable
+                }
+            };
+        }
 
         public CartService(ICartRepository cartRepository, ILogger<CartService> logger)
         {
@@ -18,12 +43,13 @@ namespace Skincare.Services.Implements
             _logger = logger;
         }
 
-        public async Task<IEnumerable<Cart>> GetAllCartsAsync(int pageNumber, int pageSize)
+        public async Task<IEnumerable<CartDTO>> GetAllCartsAsync(int pageNumber, int pageSize)
         {
             try
             {
                 _logger.LogInformation("Fetching all carts.");
-                return await _cartRepository.GetAllCartsAsync(pageNumber, pageSize);
+                var cartEntities = await _cartRepository.GetAllCartsAsync(pageNumber, pageSize);
+                return cartEntities.Select(MapCartToDTO).ToList();
             }
             catch (Exception ex)
             {
@@ -32,12 +58,12 @@ namespace Skincare.Services.Implements
             }
         }
 
-        public async Task<Cart> GetCartByIdAsync(int id)
+        public async Task<CartDTO> GetCartByIdAsync(int id)
         {
             try
             {
-                _logger.LogInformation($"Fetching cart with ID: {id}");
-                return await _cartRepository.GetCartByIdAsync(id);
+                var cartEntity = await _cartRepository.GetCartByIdAsync(id);
+                return cartEntity == null ? null : MapCartToDTO(cartEntity);
             }
             catch (Exception ex)
             {
@@ -46,12 +72,12 @@ namespace Skincare.Services.Implements
             }
         }
 
-        public async Task<IEnumerable<Cart>> GetCartsByUserIdAsync(int userId)
+        public async Task<IEnumerable<CartDTO>> GetCartsByUserIdAsync(int userId)
         {
             try
             {
-                _logger.LogInformation($"Fetching carts for user ID: {userId}");
-                return await _cartRepository.GetCartsByUserIdAsync(userId);
+                var cartEntities = await _cartRepository.GetCartsByUserIdAsync(userId);
+                return cartEntities.Select(MapCartToDTO).ToList();
             }
             catch (Exception ex)
             {
@@ -60,12 +86,20 @@ namespace Skincare.Services.Implements
             }
         }
 
-        public async Task<Cart> AddCartAsync(Cart cart)
+        public async Task<CartDTO> AddCartAsync(AddToCartDTO dto, int userId)
         {
             try
             {
-                _logger.LogInformation("Adding a new cart.");
-                return await _cartRepository.AddCartAsync(cart);
+                var cartEntity = new Cart
+                {
+                    UserId = userId,
+                    ProductId = dto.ProductId,
+                    Quantity = dto.Quantity,
+                    AddedDate = DateTime.Now
+                };
+
+                var createdCart = await _cartRepository.AddCartAsync(cartEntity);
+                return MapCartToDTO(createdCart);
             }
             catch (Exception ex)
             {
@@ -74,16 +108,22 @@ namespace Skincare.Services.Implements
             }
         }
 
-        public async Task UpdateCartAsync(Cart cart)
+        public async Task<CartDTO> UpdateCartAsync(UpdateCartDTO dto)
         {
             try
             {
-                _logger.LogInformation($"Updating cart with ID: {cart.CartId}");
-                await _cartRepository.UpdateCartAsync(cart);
+                var existingCart = await _cartRepository.GetCartByIdAsync(dto.CartId);
+                if (existingCart == null) return null;
+
+                existingCart.ProductId = dto.ProductId;
+                existingCart.Quantity = dto.Quantity;
+
+                await _cartRepository.UpdateCartAsync(existingCart);
+                return MapCartToDTO(existingCart);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"An error occurred while updating cart with ID: {cart.CartId}");
+                _logger.LogError(ex, $"An error occurred while updating cart with ID: {dto.CartId}");
                 throw;
             }
         }
@@ -92,7 +132,6 @@ namespace Skincare.Services.Implements
         {
             try
             {
-                _logger.LogInformation($"Deleting cart with ID: {id}");
                 await _cartRepository.DeleteCartAsync(id);
             }
             catch (Exception ex)

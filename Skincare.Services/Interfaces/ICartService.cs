@@ -1,4 +1,4 @@
-﻿using Skincare.BusinessObjects.Entities;
+﻿using Skincare.BusinessObjects.DTOs;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -6,12 +6,11 @@ namespace Skincare.Services.Interfaces
 {
     public interface ICartService
     {
-        Task<IEnumerable<Cart>> GetAllCartsAsync(int pageNumber, int pageSize);
-        Task<Cart> GetCartByIdAsync(int id);
-        Task<IEnumerable<Cart>> GetCartsByUserIdAsync(int userId);
-        Task<Cart> AddCartAsync(Cart cart);
-        Task UpdateCartAsync(Cart cart);
+        Task<IEnumerable<CartDTO>> GetAllCartsAsync(int pageNumber, int pageSize);
+        Task<CartDTO> GetCartByIdAsync(int id);
+        Task<IEnumerable<CartDTO>> GetCartsByUserIdAsync(int userId);
+        Task<CartDTO> AddCartAsync(AddToCartDTO dto, int userId);
+        Task<CartDTO> UpdateCartAsync(UpdateCartDTO dto);
         Task DeleteCartAsync(int id);
     }
-
 }
