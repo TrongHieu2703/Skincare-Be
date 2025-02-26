@@ -8,6 +8,8 @@ namespace Skincare.Repositories.Context;
 
 public partial class SWP391Context : DbContext
 {
+    internal readonly object Inventory;
+
     public SWP391Context(DbContextOptions<SWP391Context> options)
         : base(options)
     {
@@ -28,7 +30,6 @@ public partial class SWP391Context : DbContext
     public virtual DbSet<Faq> Faqs { get; set; }
 
     public virtual DbSet<Inventory> Inventories { get; set; }
-
     public virtual DbSet<Order> Orders { get; set; }
 
     public virtual DbSet<OrderItem> OrderItems { get; set; }

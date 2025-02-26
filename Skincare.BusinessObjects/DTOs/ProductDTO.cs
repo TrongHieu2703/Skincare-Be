@@ -8,8 +8,9 @@ namespace Skincare.BusinessObjects.DTOs
         public string Description { get; set; }
         public string Image { get; set; }
         public bool IsAvailable { get; set; }
-        public int ProductTypeId { get; set; }
-        public int ProductBrandId { get; set; }
+
+        public string ProductTypeName { get; set; }
+        public string ProductBrandName { get; set; }
+        public List<string> SkinTypes { get; set; }
     }
 }
-

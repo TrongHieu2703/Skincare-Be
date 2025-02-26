@@ -1,8 +1,9 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Skincare.BusinessObjects.Entities;
+using Microsoft.Extensions.Logging;
+using Skincare.BusinessObjects.DTOs;
 using Skincare.Services.Interfaces;
-using System.Collections.Generic;
+using System;
 using System.Threading.Tasks;
 
 namespace Skincare.API.Controllers
@@ -23,113 +24,52 @@ namespace Skincare.API.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAllProducts([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
         {
-            try
-            {
-                var products = await _productService.GetAllProductsAsync(pageNumber, pageSize);
-                return Ok(products);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error fetching all products");
-                return StatusCode(500, "Internal server error");
-            }
+            var products = await _productService.GetAllProductsAsync(pageNumber, pageSize);
+            return Ok(products);
         }
 
         [HttpGet("{id}")]
         public async Task<IActionResult> GetProductById(int id)
         {
-            try
-            {
-                var product = await _productService.GetProductByIdAsync(id);
-                if (product == null)
-                    return NotFound("Product not found");
-
-                return Ok(product);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error fetching product with ID {id}");
-                return StatusCode(500, "Internal server error");
-            }
+            var productDto = await _productService.GetProductByIdAsync(id);
+            return productDto != null ? Ok(productDto) : NotFound("Product not found");
         }
 
         [HttpGet("by-type/{productTypeId}")]
         public async Task<IActionResult> GetByType(int productTypeId)
         {
-            try
-            {
-                var products = await _productService.GetByTypeAsync(productTypeId);
-                return Ok(products);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error fetching products for type ID {productTypeId}");
-                return StatusCode(500, "Internal server error");
-            }
+            var products = await _productService.GetByTypeAsync(productTypeId);
+            return Ok(products);
         }
 
         [Authorize(Roles = "Admin")]
         [HttpPost]
-        public async Task<IActionResult> CreateProduct([FromBody] Product product)
+        public async Task<IActionResult> CreateProduct([FromBody] CreateProductDto productDto)
         {
-            if (product == null)
-                return BadRequest("Product is null");
-
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            try
-            {
-                var createdProduct = await _productService.CreateProductAsync(product);
-                return CreatedAtAction(nameof(GetProductById), new { id = createdProduct.Id }, createdProduct);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error creating product");
-                return StatusCode(500, "Internal server error");
-            }
+            var createdProduct = await _productService.CreateProductAsync(productDto);
+            return CreatedAtAction(nameof(GetProductById), new { id = createdProduct.Id }, createdProduct);
         }
 
         [Authorize(Roles = "Admin")]
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateProduct(int id, [FromBody] Product product)
+        public async Task<IActionResult> UpdateProduct(int id, [FromBody] UpdateProductDto productDto)
         {
-            if (product == null || product.Id != id)
-                return BadRequest("Product ID mismatch");
-
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            try
-            {
-                await _productService.UpdateProductAsync(product);
-                return NoContent();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error updating product with ID {id}");
-                return StatusCode(500, "Internal server error");
-            }
+            var updatedProduct = await _productService.UpdateProductAsync(id, productDto);
+            return updatedProduct != null ? Ok(updatedProduct) : NotFound("Product not found");
         }
 
         [Authorize(Roles = "Admin")]
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteProduct(int id)
         {
-            try
-            {
-                var product = await _productService.GetProductByIdAsync(id);
-                if (product == null)
-                    return NotFound("Product not found");
-
-                await _productService.DeleteProductAsync(id);
-                return NoContent();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error deleting product with ID {id}");
-                return StatusCode(500, "Internal server error");
-            }
+            await _productService.DeleteProductAsync(id);
+            return NoContent();
         }
     }
 }
