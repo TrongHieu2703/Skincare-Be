@@ -19,8 +19,11 @@ public partial class Review
 
     public DateTime? CreatedAt { get; set; }
 
+    public int? ProductId { get; set; }
+
     public virtual Account Customer { get; set; }
 
     public virtual OrderItem OrderDetail { get; set; }
-    public int ProductId { get; set; }
+
+    public virtual Product Product { get; set; }
 }

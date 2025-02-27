@@ -1,8 +1,14 @@
-﻿namespace Skincare.BusinessObjects.DTOs
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace Skincare.BusinessObjects.DTOs
 {
     public class OrderItemDto
     {
-        public int ProductId { get; set; }
-        public int ItemQuantity { get; set; }
+        [Required]
+        public int ProductId { get; set; } // Mã sản phẩm
+
+        [Required]
+        [Range(1, int.MaxValue, ErrorMessage = "Số lượng phải lớn hơn 0")]
+        public int ItemQuantity { get; set; } // Số lượng mua
     }
 }

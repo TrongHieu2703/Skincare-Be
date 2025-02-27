@@ -66,25 +66,7 @@ namespace Skincare.API.Controllers
                 _logger.LogError(ex, "Error during registration");
                 return StatusCode(500, new { Message = "Internal server error", Error = ex.Message });
             }
-        }
-
-        [HttpPost("refresh-token")]
-        public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest refreshTokenRequest)
-        {
-            try
-            {
-                var result = await _authService.RefreshTokenAsync(refreshTokenRequest);
-                if (result == null)
-                    return Unauthorized(new { Message = "Invalid refresh token" });
-
-                return Ok(result);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error refreshing token");
-                return StatusCode(500, new { Message = "Internal server error", Error = ex.Message });
-            }
-        }
+        }        
 
         [HttpPost("forgot-password")]
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest forgotPasswordRequest)

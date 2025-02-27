@@ -5,6 +5,9 @@ using Skincare.Repositories.Interfaces;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Skincare.BusinessObjects.DTOs;
+using System;
+using System.Linq;
 
 namespace Skincare.Repositories.Implements
 {
@@ -23,7 +26,10 @@ namespace Skincare.Repositories.Implements
         {
             try
             {
-                return await _context.Orders.Include(o => o.OrderItems).ToListAsync();
+                return await _context.Orders
+                    .Include(o => o.OrderItems)
+                    .Include(o => o.Transactions)
+                    .ToListAsync();
             }
             catch (Exception ex)
             {
@@ -36,8 +42,10 @@ namespace Skincare.Repositories.Implements
         {
             try
             {
-                return await _context.Orders.Include(o => o.OrderItems)
-                                            .FirstOrDefaultAsync(o => o.Id == id);
+                return await _context.Orders
+                    .Include(o => o.OrderItems)
+                    .Include(o => o.Transactions)
+                    .FirstOrDefaultAsync(o => o.Id == id);
             }
             catch (Exception ex)
             {
@@ -50,21 +58,16 @@ namespace Skincare.Repositories.Implements
         {
             try
             {
-                // Kiểm tra VoucherId nếu có
                 if (order.VoucherId.HasValue)
                 {
-                    var voucherExists = await _context.Vouchers
-                                                      .AnyAsync(v => v.Id == order.VoucherId);
-
+                    var voucherExists = await _context.Vouchers.AnyAsync(v => v.Id == order.VoucherId);
                     if (!voucherExists)
                     {
-                        // Nếu voucher không tồn tại => bỏ qua VoucherId
                         order.VoucherId = null;
                         _logger.LogWarning($"Voucher with ID {order.VoucherId} does not exist. Skipping voucher.");
                     }
                 }
 
-                // Thêm đơn hàng
                 _context.Orders.Add(order);
                 await _context.SaveChangesAsync();
                 return order;
@@ -76,73 +79,54 @@ namespace Skincare.Repositories.Implements
             }
         }
 
-
-        public async Task UpdateOrderAsync(Order updatedOrder)
+        public async Task<Order> UpdateOrderAsync(Order existingOrder, UpdateOrderDto updatedOrder)
         {
             try
             {
-                var existingOrder = await _context.Orders
-                    .Include(o => o.OrderItems)
-                    .Include(o => o.Transactions)
-                    .AsSplitQuery() // 👉 Giảm tải truy vấn phức tạp
-                    .FirstOrDefaultAsync(o => o.Id == updatedOrder.Id);
-
                 if (existingOrder == null)
-                    throw new Exception($"Order with ID {updatedOrder.Id} not found");
+                    throw new Exception($"Order not found");
 
-                // ✅ Cập nhật thông tin đơn hàng
-                existingOrder.VoucherId = updatedOrder.VoucherId;
-                existingOrder.Status = updatedOrder.Status;
-                existingOrder.TotalPrice = updatedOrder.TotalPrice;
-                existingOrder.DiscountPrice = updatedOrder.DiscountPrice;
-                existingOrder.TotalAmount = updatedOrder.TotalAmount;
-                existingOrder.IsPrepaid = updatedOrder.IsPrepaid;
+                existingOrder.VoucherId = updatedOrder.VoucherId ?? existingOrder.VoucherId;
+                existingOrder.Status = updatedOrder.Status ?? existingOrder.Status;
+                existingOrder.TotalPrice = updatedOrder.TotalPrice ?? existingOrder.TotalPrice;
+                existingOrder.DiscountPrice = updatedOrder.DiscountPrice ?? existingOrder.DiscountPrice;
+                existingOrder.TotalAmount = updatedOrder.TotalAmount ?? existingOrder.TotalAmount;
+                existingOrder.IsPrepaid = updatedOrder.IsPrepaid ?? existingOrder.IsPrepaid;
                 existingOrder.UpdatedAt = DateTime.UtcNow;
 
-                // ✅ Xóa OrderItems cũ (chỉ những item có ID > 0)
-                var existingOrderItems = existingOrder.OrderItems.Where(oi => oi.Id > 0).ToList();
-                _context.OrderItems.RemoveRange(existingOrderItems);
-
-                // ✅ Xóa Transactions cũ
-                var existingTransactions = existingOrder.Transactions.Where(t => t.TransactionId > 0).ToList();
-                _context.Transactions.RemoveRange(existingTransactions);
-
-                // 👉 Save sau khi xóa để tránh lỗi
+                // Xóa OrderItems & Transactions cũ
+                _context.OrderItems.RemoveRange(existingOrder.OrderItems);
+                _context.Transactions.RemoveRange(existingOrder.Transactions);
                 await _context.SaveChangesAsync();
 
-                // ✅ Thêm OrderItems mới
-                foreach (var item in updatedOrder.OrderItems)
+                // Thêm OrderItems mới
+                existingOrder.OrderItems = updatedOrder.OrderItems.Select(item => new OrderItem
                 {
-                    existingOrder.OrderItems.Add(new OrderItem
-                    {
-                        ProductId = item.ProductId,
-                        ItemQuantity = item.ItemQuantity
-                    });
-                }
+                    ProductId = item.ProductId,
+                    ItemQuantity = item.ItemQuantity
+                }).ToList();
 
-                // ✅ Thêm Transactions mới
-                foreach (var transaction in updatedOrder.Transactions)
+                // Thêm Transactions mới
+                existingOrder.Transactions = updatedOrder.Transactions.Select(tx => new Transaction
                 {
-                    existingOrder.Transactions.Add(new Transaction
-                    {
-                        PaymentMethod = transaction.PaymentMethod,
-                        Status = transaction.Status,
-                        Amount = transaction.Amount,
-                        CreatedDate = transaction.CreatedDate ?? DateTime.UtcNow
-                    });
-                }
+                    PaymentMethod = tx.PaymentMethod,
+                    Status = tx.Status,
+                    Amount = tx.Amount,
+                    CreatedDate = tx.CreatedDate ?? DateTime.UtcNow
+                }).ToList();
 
-                // 👉 Save lần 2 sau khi thêm mới
+                // Save lại đơn hàng sau khi cập nhật
+                _context.Orders.Update(existingOrder);
                 await _context.SaveChangesAsync();
+
+                return existingOrder;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error updating order with ID {updatedOrder.Id}");
+                _logger.LogError(ex, "Error updating order");
                 throw;
             }
         }
-
-
 
         public async Task DeleteOrderAsync(int id)
         {

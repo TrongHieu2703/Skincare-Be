@@ -1,10 +1,11 @@
-﻿using Skincare.BusinessObjects.Entities;
-using Skincare.Services.Interfaces;
+﻿using Skincare.BusinessObjects.DTOs;
+using Skincare.BusinessObjects.Entities;
 using Skincare.Repositories.Interfaces;
-using System.Collections.Generic;
-using System.Threading.Tasks;
+using Skincare.Services.Interfaces;
 using Microsoft.Extensions.Logging;
-using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace Skincare.Services.Implements
 {
@@ -19,74 +20,70 @@ namespace Skincare.Services.Implements
             _logger = logger;
         }
 
-        public async Task<IEnumerable<Order>> GetAllOrdersAsync()
+        public async Task<IEnumerable<OrderDto>> GetAllOrdersAsync()
         {
-            try
-            {
-                _logger.LogInformation("Fetching all orders.");
-                return await _orderRepository.GetAllOrdersAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "An error occurred while fetching all orders.");
-                throw;
-            }
+            var orders = await _orderRepository.GetAllOrdersAsync();
+            return orders.Select(MapToDto).ToList();
         }
 
-        public async Task<Order> GetOrderByIdAsync(int id)
+        public async Task<OrderDto> GetOrderByIdAsync(int id)
         {
-            try
-            {
-                _logger.LogInformation($"Fetching order with ID: {id}");
-                return await _orderRepository.GetOrderByIdAsync(id);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"An error occurred while fetching order with ID: {id}");
-                throw;
-            }
+            var order = await _orderRepository.GetOrderByIdAsync(id);
+            return order != null ? MapToDto(order) : null;
         }
 
-        public async Task<Order> CreateOrderAsync(Order order)
+        public async Task<OrderDto> CreateOrderAsync(CreateOrderDto createOrderDto)
         {
-            try
+            var order = new Order
             {
-                _logger.LogInformation("Creating a new order.");
-                return await _orderRepository.CreateOrderAsync(order);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "An error occurred while creating a new order.");
-                throw;
-            }
+                CustomerId = createOrderDto.CustomerId,
+                VoucherId = createOrderDto.VoucherId,
+                IsPrepaid = createOrderDto.IsPrepaid,
+                Status = "Pending",
+                OrderItems = createOrderDto.OrderItems.Select(item => new OrderItem
+                {
+                    ProductId = item.ProductId,
+                    ItemQuantity = item.ItemQuantity
+                }).ToList()
+            };
+
+            var createdOrder = await _orderRepository.CreateOrderAsync(order);
+            return MapToDto(createdOrder);
         }
 
-        public async Task UpdateOrderAsync(Order order)
+        public async Task<OrderDto> UpdateOrderAsync(int id, UpdateOrderDto updateOrderDto)
         {
-            try
-            {
-                _logger.LogInformation($"Updating order with ID: {order.Id}");
-                await _orderRepository.UpdateOrderAsync(order);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"An error occurred while updating order with ID: {order.Id}");
-                throw;
-            }
+            var existingOrder = await _orderRepository.GetOrderByIdAsync(id);
+            if (existingOrder == null) return null;
+
+            var updatedOrder = await _orderRepository.UpdateOrderAsync(existingOrder, updateOrderDto);
+            return MapToDto(updatedOrder);
         }
-                
+
         public async Task DeleteOrderAsync(int id)
         {
-            try
+            await _orderRepository.DeleteOrderAsync(id);
+        }
+
+        private OrderDto MapToDto(Order order)
+        {
+            return new OrderDto
             {
-                _logger.LogInformation($"Deleting order with ID: {id}");
-                await _orderRepository.DeleteOrderAsync(id);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"An error occurred while deleting order with ID: {id}");
-                throw;
-            }
+                Id = order.Id,
+                CustomerId = order.CustomerId,
+                VoucherId = order.VoucherId,
+                TotalPrice = order.TotalPrice,
+                DiscountPrice = order.DiscountPrice,
+                TotalAmount = order.TotalAmount,
+                IsPrepaid = order.IsPrepaid,
+                Status = order.Status,
+                UpdatedAt = order.UpdatedAt,
+                OrderItems = order.OrderItems.Select(oi => new OrderItemDto
+                {
+                    ProductId = oi.ProductId,
+                    ItemQuantity = oi.ItemQuantity
+                }).ToList()
+            };
         }
     }
 }

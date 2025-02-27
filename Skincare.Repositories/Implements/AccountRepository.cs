@@ -22,10 +22,8 @@ namespace Skincare.Repositories.Implements
 
         public async Task<Account> GetByRefreshTokenAsync(string refreshToken)
         {
-            return await _context.Accounts
-                .FirstOrDefaultAsync(a => a.RefreshToken == refreshToken);
+            return await _context.Accounts.FirstOrDefaultAsync(a => a.RefreshToken == refreshToken);
         }
-
 
         public async Task<IEnumerable<Account>> GetAllAccountsAsync()
         {
@@ -59,21 +57,29 @@ namespace Skincare.Repositories.Implements
             {
                 var account = await _context.Accounts
                     .AsNoTracking()
-                    .FirstOrDefaultAsync(a => a.Email == email);
+                    .Where(a => a.Email == email)
+                    .Select(a => new Account
+                    {
+                        Id = a.Id,
+                        Email = a.Email ?? string.Empty,  // ✅ Fix lỗi NULL
+                        Username = a.Username ?? string.Empty,  // ✅ Fix lỗi NULL
+                        PasswordHash = a.PasswordHash ?? string.Empty, // ✅ Fix lỗi NULL
+                        Role = a.Role ?? "User", // ✅ Fix lỗi NULL
+                        Address = a.Address ?? string.Empty, // ✅ Fix lỗi NULL
+                        PhoneNumber = a.PhoneNumber ?? string.Empty, // ✅ Fix lỗi NULL
+                        Avatar = a.Avatar ?? string.Empty, // ✅ Fix lỗi NULL
+                        Status = a.Status ?? "active", // ✅ Fix lỗi NULL
+                        CreatedAt = a.CreatedAt ?? DateTime.UtcNow, // ✅ Fix NULL thành giá trị mặc định
+                        RefreshToken = a.RefreshToken ?? string.Empty,
+                        RefreshTokenExpiry = a.RefreshTokenExpiry ?? DateTime.UtcNow.AddDays(7) // ✅ Nếu NULL thì tự động set giá trị
+                    })
+                    .FirstOrDefaultAsync();
 
                 if (account == null)
                 {
                     _logger.LogWarning($"No account found for email: {email}");
                     return null;
                 }
-
-                // Gán giá trị mặc định cho các trường có thể null
-                account.Username = account.Username ?? string.Empty;
-                account.Address = account.Address ?? string.Empty;
-                account.Avatar = account.Avatar ?? string.Empty;
-                account.PhoneNumber = account.PhoneNumber ?? string.Empty;
-                account.Status = account.Status ?? string.Empty;
-                account.Role = account.Role ?? "User";
 
                 return account;
             }
@@ -83,6 +89,9 @@ namespace Skincare.Repositories.Implements
                 throw;
             }
         }
+
+
+
 
         public async Task<Account> CreateAccountAsync(Account account)
         {
@@ -103,7 +112,19 @@ namespace Skincare.Repositories.Implements
         {
             try
             {
-                _context.Accounts.Update(account);
+                var existingAccount = await _context.Accounts.FindAsync(account.Id);
+                if (existingAccount == null)
+                {
+                    _logger.LogWarning($"Account with ID {account.Id} not found.");
+                    return;
+                }
+
+                // ✅ Chỉ cập nhật RefreshToken & RefreshTokenExpiry
+                existingAccount.RefreshToken = !string.IsNullOrEmpty(account.RefreshToken) ? account.RefreshToken : existingAccount.RefreshToken;
+                existingAccount.RefreshTokenExpiry = account.RefreshTokenExpiry ?? existingAccount.RefreshTokenExpiry;
+
+                _logger.LogInformation($"Updating account ID {account.Id}: RefreshToken = {existingAccount.RefreshToken}, Expiry = {existingAccount.RefreshTokenExpiry}");
+
                 await _context.SaveChangesAsync();
             }
             catch (Exception ex)
@@ -112,6 +133,9 @@ namespace Skincare.Repositories.Implements
                 throw;
             }
         }
+
+
+
 
         public async Task DeleteAccountAsync(int id)
         {

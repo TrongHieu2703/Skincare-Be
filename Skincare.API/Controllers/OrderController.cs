@@ -57,11 +57,8 @@ namespace Skincare.API.Controllers
         [HttpPost]
         public async Task<IActionResult> CreateOrder([FromBody] CreateOrderDto createOrderDto)
         {
-            if (createOrderDto == null)
-                return BadRequest("Order data is null");
-
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
+            if (createOrderDto == null) return BadRequest("Order data is null");
+            if (!ModelState.IsValid) return BadRequest(ModelState);
 
             try
             {
@@ -89,7 +86,7 @@ namespace Skincare.API.Controllers
                     }).ToList()
                 };
 
-                var createdOrder = await _orderService.CreateOrderAsync(newOrder);
+                var createdOrder = await _orderService.CreateOrderAsync(createOrderDto);
                 return CreatedAtAction(nameof(GetOrderById), new { id = createdOrder.Id }, createdOrder);
             }
             catch (Exception ex)
@@ -107,43 +104,11 @@ namespace Skincare.API.Controllers
 
             try
             {
-                var existingOrder = await _orderService.GetOrderByIdAsync(id);
-                if (existingOrder == null)
+                var updatedOrder = await _orderService.UpdateOrderAsync(id, updateOrderDto);
+                if (updatedOrder == null)
                     return NotFound($"Order with ID {id} not found");
 
-                existingOrder.VoucherId = updateOrderDto.VoucherId ?? existingOrder.VoucherId;
-                existingOrder.Status = updateOrderDto.Status ?? existingOrder.Status;
-                existingOrder.TotalPrice = updateOrderDto.TotalPrice ?? existingOrder.TotalPrice;
-                existingOrder.DiscountPrice = updateOrderDto.DiscountPrice ?? existingOrder.DiscountPrice;
-                existingOrder.TotalAmount = ((decimal?)(updateOrderDto.TotalPrice ?? existingOrder.TotalPrice)).GetValueOrDefault() -
-                            ((decimal?)(updateOrderDto.DiscountPrice ?? existingOrder.DiscountPrice)).GetValueOrDefault();
-                existingOrder.IsPrepaid = updateOrderDto.IsPrepaid ?? existingOrder.IsPrepaid;
-                existingOrder.UpdatedAt = DateTime.UtcNow;
-
-                if (updateOrderDto.OrderItems != null)
-                {
-                    existingOrder.OrderItems.Clear();
-                    existingOrder.OrderItems.AddRange(updateOrderDto.OrderItems.Select(item => new OrderItem
-                    {
-                        ProductId = item.ProductId,
-                        ItemQuantity = item.ItemQuantity
-                    }));
-                }
-
-                if (updateOrderDto.Transactions != null)
-                {
-                    existingOrder.Transactions.Clear();
-                    existingOrder.Transactions.AddRange(updateOrderDto.Transactions.Select(tx => new Transaction
-                    {
-                        PaymentMethod = tx.PaymentMethod,
-                        Status = tx.Status,
-                        Amount = tx.Amount,
-                        CreatedDate = tx.CreatedDate ?? DateTime.UtcNow
-                    }));
-                }
-
-                await _orderService.UpdateOrderAsync(existingOrder);
-                return Ok(existingOrder);
+                return Ok(updatedOrder);
             }
             catch (Exception ex)
             {
@@ -151,6 +116,7 @@ namespace Skincare.API.Controllers
                 return StatusCode(500, "Internal server error");
             }
         }
+
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteOrder(int id)
