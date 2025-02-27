@@ -18,6 +18,9 @@ namespace Skincare.Repositories.Implements
         public async Task<IEnumerable<Product>> GetAllProductsAsync(int pageNumber, int pageSize)
         {
             return await _context.Products
+               .Include(p => p.ProductType) // Include ProductType
+               .Include(p => p.ProductBrand) // Include ProductBrand
+               .Include(p => p.ProductSkinTypes) // Include ProductSkinTypes
                 .Skip((pageNumber - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();

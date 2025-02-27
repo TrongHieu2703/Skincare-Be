@@ -7,7 +7,7 @@ namespace Skincare.Services.Interfaces
     {
         Task<LoginResponse> LoginAsync(LoginRequest loginRequest);
         Task<bool> RegisterAsync(RegisterRequest registerRequest);
-        Task<LoginResponse> RefreshTokenAsync(RefreshTokenRequest refreshTokenRequest);
+        //Task<LoginResponse> RefreshTokenAsync(RefreshTokenRequest refreshTokenRequest);
         Task<bool> ForgotPasswordAsync(ForgotPasswordRequest request);
         Task<bool> ResetPasswordAsync(ResetPasswordRequest request);
     }

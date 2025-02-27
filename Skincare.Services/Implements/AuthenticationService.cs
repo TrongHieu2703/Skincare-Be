@@ -36,19 +36,17 @@ namespace Skincare.Services.Implements
                 _logger.LogInformation($"Attempting login for: {loginRequest.Email}");
                 var account = await _accountRepository.GetByEmailAsync(loginRequest.Email);
 
-                if (account == null || !VerifyPasswordHash(loginRequest.Password, account.PasswordHash))
+                if (account == null || string.IsNullOrEmpty(account.PasswordHash) || !VerifyPasswordHash(loginRequest.Password, account.PasswordHash))
                 {
                     _logger.LogWarning("Invalid login attempt");
                     return null;
                 }
 
-                var token = GenerateJwtToken(account);
-                var refreshToken = GenerateRefreshToken();
+                _logger.LogInformation($"DEBUG ACCOUNT DATA: ID: {account.Id}, Email: {account.Email}, Username: {account.Username}, " +
+                    $"PasswordHash: {account.PasswordHash}, Role: {account.Role}, Status: {account.Status}, Address: {account.Address}, " +
+                    $"PhoneNumber: {account.PhoneNumber}, CreatedAt: {account.CreatedAt}, RefreshToken: {account.RefreshToken}, RefreshTokenExpiry: {account.RefreshTokenExpiry}");
 
-                // Save refresh token
-                account.RefreshToken = refreshToken;
-                account.RefreshTokenExpiry = DateTime.UtcNow.AddDays(7);
-                await _accountRepository.UpdateAccountAsync(account);
+                var token = GenerateJwtToken(account);
 
                 return new LoginResponse
                 {
@@ -56,7 +54,6 @@ namespace Skincare.Services.Implements
                     Role = account.Role,
                     Username = account.Username,
                     Expiration = DateTime.UtcNow.AddHours(2),
-                    RefreshToken = refreshToken,
                     Message = "Login successful"
                 };
             }
@@ -84,7 +81,11 @@ namespace Skincare.Services.Implements
                     Email = registerRequest.Email,
                     PasswordHash = CreatePasswordHash(registerRequest.Password),
                     Role = "User",
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.UtcNow,
+                    PhoneNumber = registerRequest.PhoneNumber,
+                    Address = registerRequest.Address,
+                    Avatar = registerRequest.Avatar,
+                    Status = "active" 
                 };
 
                 await _accountRepository.CreateAccountAsync(newAccount);
@@ -95,34 +96,6 @@ namespace Skincare.Services.Implements
                 _logger.LogError(ex, "Registration failed");
                 throw;
             }
-        }
-
-        public async Task<LoginResponse> RefreshTokenAsync(RefreshTokenRequest refreshTokenRequest)
-        {
-            var account = await _accountRepository.GetByRefreshTokenAsync(refreshTokenRequest.RefreshToken);
-
-            if (account == null || account.RefreshTokenExpiry < DateTime.UtcNow)
-            {
-                _logger.LogWarning("Invalid or expired refresh token");
-                return null;
-            }
-
-            var newJwtToken = GenerateJwtToken(account);
-            var newRefreshToken = GenerateRefreshToken();
-
-            account.RefreshToken = newRefreshToken;
-            account.RefreshTokenExpiry = DateTime.UtcNow.AddDays(7);
-            await _accountRepository.UpdateAccountAsync(account);
-
-            return new LoginResponse
-            {
-                Token = newJwtToken,
-                Role = account.Role,
-                Username = account.Username,
-                Expiration = DateTime.UtcNow.AddHours(2),
-                RefreshToken = newRefreshToken,
-                Message = "Token refreshed successfully"
-            };
         }
 
         public async Task<bool> ForgotPasswordAsync(ForgotPasswordRequest request)
@@ -195,15 +168,15 @@ namespace Skincare.Services.Implements
             return tokenHandler.WriteToken(token);
         }
 
-        private string GenerateRefreshToken()
-        {
-            var randomBytes = new byte[64];
-            using (var rng = RandomNumberGenerator.Create())
-            {
-                rng.GetBytes(randomBytes);
-                return Convert.ToBase64String(randomBytes);
-            }
-        }
+        //private string GenerateRefreshToken()
+        //{
+        //    var randomBytes = new byte[64];
+        //    using (var rng = RandomNumberGenerator.Create())
+        //    {
+        //        rng.GetBytes(randomBytes);
+        //        return Convert.ToBase64String(randomBytes);
+        //    }
+        //}
 
         private string GenerateOtp()
         {

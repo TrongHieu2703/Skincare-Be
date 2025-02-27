@@ -25,7 +25,7 @@ public class ReviewRepository : IReviewRepository
                 Id = r.Id,
                 OrderDetailId = r.OrderDetailId,
                 CustomerId = r.CustomerId,
-                ProductId = r.ProductId,
+                ProductId = (int)r.ProductId,
                 Rating = r.Rating,
                 Comment = r.Comment,
                 CreatedAt = r.CreatedAt
@@ -41,7 +41,7 @@ public class ReviewRepository : IReviewRepository
             Id = review.Id,
             OrderDetailId = review.OrderDetailId,
             CustomerId = review.CustomerId,
-            ProductId = review.ProductId,
+            ProductId = (int)review.ProductId,
             Rating = review.Rating,
             Comment = review.Comment,
             CreatedAt = review.CreatedAt
@@ -68,7 +68,7 @@ public class ReviewRepository : IReviewRepository
             Id = review.Id,
             OrderDetailId = review.OrderDetailId,
             CustomerId = review.CustomerId,
-            ProductId = review.ProductId,
+            ProductId = (int)review.ProductId,
             Rating = review.Rating,
             Comment = review.Comment,
             CreatedAt = review.CreatedAt
@@ -90,7 +90,7 @@ public class ReviewRepository : IReviewRepository
             Id = review.Id,
             OrderDetailId = review.OrderDetailId,
             CustomerId = review.CustomerId,
-            ProductId = review.ProductId,
+            ProductId = (int)review.ProductId,
             Rating = review.Rating,
             Comment = review.Comment,
             CreatedAt = review.CreatedAt

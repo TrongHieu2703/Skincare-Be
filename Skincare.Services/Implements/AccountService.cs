@@ -90,19 +90,54 @@ namespace Skincare.Services.Implements
         }
 
 
-        public async Task UpdateAccountAsync(Account account)
+        public async Task UpdateProfileAsync(int userId, UProfileDTO profileDto)
         {
             try
             {
-                _logger.LogInformation($"Updating account with ID: {account.Id}");
+                var account = await _accountRepository.GetAccountByIdAsync(userId);
+                if (account == null)
+                    throw new Exception($"User ID {userId} not found");
+
+                account.Username = profileDto.Username;
+                account.Email = profileDto.Email;
+                account.Address = profileDto.Address;
+                account.Avatar = profileDto.Avatar;
+                account.PhoneNumber = profileDto.PhoneNumber;
+
                 await _accountRepository.UpdateAccountAsync(account);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"An error occurred while updating account with ID: {account.Id}");
+                _logger.LogError(ex, $"Error updating profile for User ID {userId}");
                 throw;
             }
         }
+
+        public async Task<bool> ChangePasswordAsync(int userId, ChangePasswordDto passwordDto)
+        {
+            try
+            {
+                var account = await _accountRepository.GetAccountByIdAsync(userId);
+                if (account == null)
+                    throw new Exception($"User ID {userId} not found");
+
+                // Kiểm tra mật khẩu hiện tại
+                if (!BCrypt.Net.BCrypt.Verify(passwordDto.CurrentPassword, account.PasswordHash))
+                    return false;
+
+                // Cập nhật mật khẩu mới
+                account.PasswordHash = BCrypt.Net.BCrypt.HashPassword(passwordDto.NewPassword);
+                await _accountRepository.UpdateAccountAsync(account);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error changing password for User ID {userId}");
+                throw;
+            }
+        }
+
 
         public async Task DeleteAccountAsync(int id)
         {

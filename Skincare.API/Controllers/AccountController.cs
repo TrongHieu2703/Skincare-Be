@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Skincare.BusinessObjects.DTOs;
 using Skincare.BusinessObjects.Entities;
 using Skincare.Services.Interfaces;
 using System.Collections.Generic;
@@ -75,26 +76,49 @@ namespace Skincare.API.Controllers
             }
         }
 
-        [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateAccount(int id, [FromBody] Account account)
+        [HttpPut("update-profile")]
+        [Authorize]
+        public async Task<IActionResult> UpdateProfile([FromBody] UProfileDTO profileDto)
         {
-            if (account == null || account.Id != id)
-                return BadRequest(new { Message = "Account ID mismatch" });
-
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
+            if (profileDto == null)
+                return BadRequest(new { Message = "Profile data is null" });
 
             try
             {
-                await _accountService.UpdateAccountAsync(account);
-                return NoContent();
+                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+                await _accountService.UpdateProfileAsync(userId, profileDto);
+                return Ok(new { Message = "Profile updated successfully" });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error updating account with ID {id}");
+                _logger.LogError(ex, "Error updating profile");
                 return StatusCode(500, new { Message = "Internal server error", Error = ex.Message });
             }
         }
+
+        [HttpPut("change-password")]
+        [Authorize]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto passwordDto)
+        {
+            if (passwordDto == null)
+                return BadRequest(new { Message = "Password data is null" });
+
+            try
+            {
+                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+                var result = await _accountService.ChangePasswordAsync(userId, passwordDto);
+                if (!result)
+                    return BadRequest(new { Message = "Incorrect current password or validation failed" });
+
+                return Ok(new { Message = "Password changed successfully" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error changing password");
+                return StatusCode(500, new { Message = "Internal server error", Error = ex.Message });
+            }
+        }
+
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteAccount(int id)
