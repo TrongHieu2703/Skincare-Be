@@ -6,7 +6,7 @@ namespace Skincare.Repositories.Interfaces
 {
     public interface ITransactionRepository
     {
-        Task<IEnumerable<TransactionDto>> GetTransactionsByOrderIdAsync(int orderId); 
+        Task<IEnumerable<TransactionDto>> GetTransactionsByOrderIdAsync(int orderId);
         Task<TransactionDto> CreateTransactionAsync(CreateTransactionDto createTransactionDto);
         Task<TransactionDto> UpdateTransactionAsync(int id, UpdateTransactionDto updateTransactionDto);
         Task DeleteTransactionAsync(int id);

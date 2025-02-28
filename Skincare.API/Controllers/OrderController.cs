@@ -1,20 +1,21 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using NuGet.Packaging;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Skincare.BusinessObjects.DTOs;
-using Skincare.BusinessObjects.Entities;
 using Skincare.Services.Interfaces;
-using System.Collections.Generic;
+using System;
+using System.Security.Claims;
 using System.Threading.Tasks;
 
 namespace Skincare.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class OrderController : ControllerBase
     {
         private readonly IOrderService _orderService;
         private readonly ILogger<OrderController> _logger;
-
         public OrderController(IOrderService orderService, ILogger<OrderController> logger)
         {
             _orderService = orderService;
@@ -44,7 +45,6 @@ namespace Skincare.API.Controllers
                 var order = await _orderService.GetOrderByIdAsync(id);
                 if (order == null)
                     return NotFound();
-
                 return Ok(order);
             }
             catch (Exception ex)
@@ -54,38 +54,34 @@ namespace Skincare.API.Controllers
             }
         }
 
+        // Lấy lịch sử đơn hàng của user đang đăng nhập
+        [HttpGet("user")]
+        public async Task<IActionResult> GetOrdersByUser()
+        {
+            try
+            {
+                var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (string.IsNullOrEmpty(userIdStr) || !int.TryParse(userIdStr, out var userId))
+                    return Unauthorized(new { Message = "Invalid user token" });
+                var orders = await _orderService.GetOrdersByUserIdAsync(userId);
+                return Ok(orders);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching orders for user");
+                return StatusCode(500, "Internal server error");
+            }
+        }
+
         [HttpPost]
         public async Task<IActionResult> CreateOrder([FromBody] CreateOrderDto createOrderDto)
         {
-            if (createOrderDto == null) return BadRequest("Order data is null");
-            if (!ModelState.IsValid) return BadRequest(ModelState);
-
+            if (createOrderDto == null)
+                return BadRequest("Order data is null");
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
             try
             {
-                var newOrder = new Order
-                {
-                    CustomerId = createOrderDto.CustomerId,
-                    VoucherId = createOrderDto.VoucherId,
-                    TotalPrice = createOrderDto.TotalPrice,
-                    DiscountPrice = createOrderDto.DiscountPrice,
-                    TotalAmount = createOrderDto.TotalPrice - (createOrderDto.DiscountPrice ?? 0),
-                    IsPrepaid = createOrderDto.IsPrepaid,
-                    Status = createOrderDto.Status,
-                    UpdatedAt = DateTime.UtcNow,
-                    OrderItems = createOrderDto.OrderItems.Select(item => new OrderItem
-                    {
-                        ProductId = item.ProductId,
-                        ItemQuantity = item.ItemQuantity
-                    }).ToList(),
-                    Transactions = createOrderDto.Transactions.Select(tx => new Transaction
-                    {
-                        PaymentMethod = tx.PaymentMethod,
-                        Status = tx.Status,
-                        Amount = tx.Amount,
-                        CreatedDate = tx.CreatedDate ?? DateTime.UtcNow
-                    }).ToList()
-                };
-
                 var createdOrder = await _orderService.CreateOrderAsync(createOrderDto);
                 return CreatedAtAction(nameof(GetOrderById), new { id = createdOrder.Id }, createdOrder);
             }
@@ -101,13 +97,11 @@ namespace Skincare.API.Controllers
         {
             if (updateOrderDto == null)
                 return BadRequest("Update data is null");
-
             try
             {
                 var updatedOrder = await _orderService.UpdateOrderAsync(id, updateOrderDto);
                 if (updatedOrder == null)
                     return NotFound($"Order with ID {id} not found");
-
                 return Ok(updatedOrder);
             }
             catch (Exception ex)
@@ -116,7 +110,6 @@ namespace Skincare.API.Controllers
                 return StatusCode(500, "Internal server error");
             }
         }
-
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteOrder(int id)

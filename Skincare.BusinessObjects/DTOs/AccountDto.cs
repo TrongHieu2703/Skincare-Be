@@ -1,4 +1,6 @@
-﻿namespace Skincare.BusinessObjects.DTOs
+﻿using System;
+
+namespace Skincare.BusinessObjects.DTOs
 {
     public class AccountDto
     {

@@ -1,9 +1,7 @@
-﻿using System;
-
-namespace Skincare.BusinessObjects.DTOs
+﻿namespace Skincare.BusinessObjects.DTOs
 {
     public class UpdateInventoryDto
     {
-        public int? Quantity { get; set; }   
+        public int? Quantity { get; set; }
     }
 }

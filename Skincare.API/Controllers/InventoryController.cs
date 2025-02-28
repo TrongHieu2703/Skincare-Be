@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Skincare.BusinessObjects.DTOs;
 using Skincare.Services.Interfaces;
+using System.Threading.Tasks;
 
 namespace Skincare.API.Controllers
 {
@@ -9,14 +10,17 @@ namespace Skincare.API.Controllers
     public class InventoryController : ControllerBase
     {
         private readonly IInventoryService _inventoryService;
-
         public InventoryController(IInventoryService inventoryService)
         {
             _inventoryService = inventoryService;
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAllInventories() => Ok(await _inventoryService.GetAllInventoriesAsync());
+        public async Task<IActionResult> GetAllInventories()
+        {
+            var inventories = await _inventoryService.GetAllInventoriesAsync();
+            return Ok(inventories);
+        }
 
         [HttpGet("{id}")]
         public async Task<IActionResult> GetInventoryById(int id)

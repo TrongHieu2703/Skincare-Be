@@ -2,7 +2,10 @@
 using Skincare.BusinessObjects.Entities;
 using Skincare.Repositories.Context;
 using Skincare.Repositories.Interfaces;
-using Skincare.BusinessObjects.DTOs;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using System;
 
 namespace Skincare.Repositories.Implements
 {
@@ -18,9 +21,9 @@ namespace Skincare.Repositories.Implements
         public async Task<IEnumerable<Product>> GetAllProductsAsync(int pageNumber, int pageSize)
         {
             return await _context.Products
-               .Include(p => p.ProductType) // Include ProductType
-               .Include(p => p.ProductBrand) // Include ProductBrand
-               .Include(p => p.ProductSkinTypes) // Include ProductSkinTypes
+                .Include(p => p.ProductType)
+                .Include(p => p.ProductBrand)
+                .Include(p => p.ProductSkinTypes)
                 .Skip((pageNumber - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
@@ -29,20 +32,41 @@ namespace Skincare.Repositories.Implements
         public async Task<Product> GetProductByIdAsync(int id)
         {
             return await _context.Products
-                .Include(p => p.ProductType) // Include ProductType
-                .Include(p => p.ProductBrand) // Include ProductBrand
-                .Include(p => p.ProductSkinTypes) // Include ProductSkinTypes
-                    .ThenInclude(pst => pst.SkinType) // Include SkinType
+                .Include(p => p.ProductType)
+                .Include(p => p.ProductBrand)
+                .Include(p => p.ProductSkinTypes)
+                    .ThenInclude(pst => pst.SkinType)
                 .FirstOrDefaultAsync(p => p.Id == id);
+        }
+
+        public async Task<IEnumerable<Product>> GetByTypeAsync(int productTypeId)
+        {
+            return await _context.Products
+                .Include(p => p.ProductType)
+                .Include(p => p.ProductBrand)
+                .Include(p => p.ProductSkinTypes)
+                .Where(p => p.ProductTypeId == productTypeId)
+                .ToListAsync();
+        }
+
+        public async Task<IEnumerable<Product>> SearchProductsAsync(string keyword)
+        {
+            return await _context.Products
+                .Include(p => p.ProductType)
+                .Include(p => p.ProductBrand)
+                .Include(p => p.ProductSkinTypes)
+                    .ThenInclude(pst => pst.SkinType)
+                .Where(p => p.Name.Contains(keyword) || p.Description.Contains(keyword))
+                .ToListAsync();
         }
 
         public async Task<IEnumerable<Product>> FilterProductsAsync(string category, bool? inStock, decimal? minPrice, decimal? maxPrice)
         {
             var query = _context.Products
-                .Include(p => p.ProductType) // Include ProductType
-                .Include(p => p.ProductBrand) // Include ProductBrand
-                .Include(p => p.ProductSkinTypes) // Include ProductSkinTypes
-                    .ThenInclude(pst => pst.SkinType) // Include SkinType
+                .Include(p => p.ProductType)
+                .Include(p => p.ProductBrand)
+                .Include(p => p.ProductSkinTypes)
+                    .ThenInclude(pst => pst.SkinType)
                 .AsQueryable();
 
             if (!string.IsNullOrEmpty(category))
@@ -60,56 +84,31 @@ namespace Skincare.Repositories.Implements
             return await query.ToListAsync();
         }
 
-        public async Task<IEnumerable<Product>> SearchProductsAsync(string keyword)
+        public async Task<Product> CreateProductAsync(Product product)
         {
-            return await _context.Products
-                .Include(p => p.ProductType) // Include ProductType
-                .Include(p => p.ProductBrand) // Include ProductBrand
-                .Include(p => p.ProductSkinTypes) // Include ProductSkinTypes
-                    .ThenInclude(pst => pst.SkinType) // Include SkinType
-                .Where(p => p.Name.Contains(keyword) || p.Description.Contains(keyword))
-                .ToListAsync();
-        }
-
-        public async Task<IEnumerable<Product>> GetByTypeAsync(int productTypeId)
-        {
-            return await _context.Products
-                .Where(p => p.ProductTypeId == productTypeId)
-                .ToListAsync();
-        }
-
-        public async Task<Product> CreateProductAsync(CreateProductDto createProductDto)
-        {
-            var product = new Product
-            {
-                Name = createProductDto.Name,
-                Description = createProductDto.Description,
-                Price = createProductDto.Price,
-                ProductTypeId = createProductDto.ProductTypeId,
-                IsAvailable = createProductDto.IsAvailable
-            };
             _context.Products.Add(product);
             await _context.SaveChangesAsync();
             return product;
         }
 
-        public async Task<Product> UpdateProductAsync(int id, UpdateProductDto updateProductDto)
+        public async Task<Product> UpdateProductAsync(Product product)
         {
-            var product = await _context.Products.FindAsync(id);
-            if (product == null)
-            {
+            var existing = await _context.Products.FindAsync(product.Id);
+            if (existing == null)
                 return null;
-            }
 
-            product.Name = updateProductDto.Name ?? product.Name;
-            product.Description = updateProductDto.Description ?? product.Description;
-            product.Price = updateProductDto.Price ?? product.Price;
-            product.ProductTypeId = updateProductDto.ProductTypeId ?? product.ProductTypeId;
-            product.IsAvailable = updateProductDto.IsAvailable ?? product.IsAvailable;
+            // Cập nhật các trường
+            existing.Name = product.Name;
+            existing.Description = product.Description;
+            existing.Price = product.Price;
+            existing.Image = product.Image;
+            existing.IsAvailable = product.IsAvailable;
+            existing.ProductTypeId = product.ProductTypeId;
+            existing.ProductBrandId = product.ProductBrandId;
 
-            _context.Products.Update(product);
+            _context.Products.Update(existing);
             await _context.SaveChangesAsync();
-            return product;
+            return existing;
         }
 
         public async Task DeleteProductAsync(int id)

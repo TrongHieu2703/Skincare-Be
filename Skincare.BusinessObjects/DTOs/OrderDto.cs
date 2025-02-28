@@ -14,9 +14,7 @@ namespace Skincare.BusinessObjects.DTOs
         public string Status { get; set; }
         public DateTime? UpdatedAt { get; set; }
         public decimal TotalAmount { get; set; }
-
         public List<OrderItemDto> OrderItems { get; set; } = new List<OrderItemDto>();
         public List<TransactionDto> Transactions { get; set; } = new List<TransactionDto>();
     }
-
 }

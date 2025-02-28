@@ -14,6 +14,7 @@ namespace Skincare.BusinessObjects.DTOs
         public int Quantity { get; set; }
         public DateTime? AddedDate { get; set; }
 
-        public ProductDTO Product { get; set; }
+        public ProductDto Product { get; set; }
+
     }
 }

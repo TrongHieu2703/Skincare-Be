@@ -1,5 +1,4 @@
 ﻿using Skincare.BusinessObjects.DTOs;
-using Skincare.Repositories.Implements;
 using Skincare.Repositories.Interfaces;
 using Skincare.Services.Interfaces;
 using System.Collections.Generic;
@@ -9,11 +8,9 @@ namespace Skincare.Services.Implements
 {
     public class TransactionService : ITransactionService
     {
-        private readonly Skincare.Repositories.Interfaces.ITransactionRepository _transactionRepository;
+        private readonly ITransactionRepository _transactionRepository;
 
-
-        public TransactionService(Skincare.Repositories.Interfaces.ITransactionRepository transactionRepository)
-
+        public TransactionService(ITransactionRepository transactionRepository)
         {
             _transactionRepository = transactionRepository;
         }

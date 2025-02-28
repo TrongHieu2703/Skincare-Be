@@ -2,7 +2,6 @@
 using Skincare.BusinessObjects.Entities;
 using Skincare.Repositories.Context;
 using Skincare.Repositories.Interfaces;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -42,6 +41,14 @@ namespace Skincare.Repositories.Implements
                 .ToListAsync();
         }
 
+        // Phương thức mới: Lấy Cart của một user theo ProductId
+        public async Task<Cart> GetCartByUserAndProductAsync(int userId, int productId)
+        {
+            return await _context.Carts
+                .Include(c => c.Product)
+                .FirstOrDefaultAsync(c => c.UserId == userId && c.ProductId == productId);
+        }
+
         public async Task<Cart> AddCartAsync(Cart cart)
         {
             _context.Carts.Add(cart);
@@ -59,8 +66,8 @@ namespace Skincare.Repositories.Implements
         public async Task<bool> DeleteCartAsync(int id)
         {
             var cart = await _context.Carts.FindAsync(id);
-            if (cart == null) return false;
-
+            if (cart == null)
+                return false;
             _context.Carts.Remove(cart);
             await _context.SaveChangesAsync();
             return true;

@@ -11,7 +11,7 @@ namespace Skincare.Repositories.Interfaces
         Task<Inventory> GetInventoryByIdAsync(int id);
         Task<bool> CheckStockAvailability(int productId, int quantity);
         Task<Inventory> UpdateInventoryAsync(Inventory inventory);
-        Task<Inventory> CreateInventoryAsync(CreateInventoryDto createInventoryDto); 
-        Task DeleteInventoryAsync(int id); 
+        Task<Inventory> CreateInventoryAsync(CreateInventoryDto createInventoryDto);
+        Task DeleteInventoryAsync(int id);
     }
 }

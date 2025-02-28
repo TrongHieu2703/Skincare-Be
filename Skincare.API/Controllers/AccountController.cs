@@ -9,8 +9,9 @@ using System.Threading.Tasks;
 
 namespace Skincare.API.Controllers
 {
-    [ApiController]
     [Route("api/[controller]")]
+    [ApiController]
+    [Authorize]
     public class AccountController : ControllerBase
     {
         private readonly IAccountService _accountService;
@@ -22,117 +23,45 @@ namespace Skincare.API.Controllers
             _logger = logger;
         }
 
-        [HttpGet]
-        public async Task<IActionResult> GetAllAccounts()
+        [HttpGet("user-profile")]
+        public async Task<IActionResult> GetUserProfile()
         {
             try
             {
-                var accounts = await _accountService.GetAllAccountsAsync();
-                return Ok(accounts);
+                var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (string.IsNullOrEmpty(userIdStr) || !int.TryParse(userIdStr, out var userId))
+                    return Unauthorized(new { Message = "Invalid user token" });
+
+                var profile = await _accountService.GetUserProfile(userId);
+                if (profile == null)
+                    return NotFound(new { Message = "User not found" });
+                return Ok(profile);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error fetching all accounts");
-                return StatusCode(500, new { Message = "Internal server error", Error = ex.Message });
-            }
-        }
-
-        [HttpGet("{id}")]
-        public async Task<IActionResult> GetAccountById(int id)
-        {
-            try
-            {
-                var account = await _accountService.GetAccountByIdAsync(id);
-                if (account == null)
-                    return NotFound(new { Message = "Account not found" });
-
-                return Ok(account);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error fetching account with ID {id}");
-                return StatusCode(500, new { Message = "Internal server error", Error = ex.Message });
-            }
-        }
-
-        // Giả sử đây là luồng Admin tạo tài khoản
-        [HttpPost]
-        public async Task<IActionResult> CreateAccount([FromBody] CreateAccountDto createDto)
-        {
-            if (createDto == null)
-                return BadRequest(new { Message = "Request body is null" });
-
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
-
-            try
-            {
-                var createdAccount = await _accountService.CreateAccountAsync(createDto);
-                return CreatedAtAction(nameof(GetAccountById), new { id = createdAccount.Id }, createdAccount);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error creating account");
-                return StatusCode(500, new { Message = "Internal server error", Error = ex.Message });
+                _logger.LogError(ex, "Error fetching user profile");
+                return StatusCode(500, new { Message = "Internal server error" });
             }
         }
 
         [HttpPut("update-profile")]
-        [Authorize]
         public async Task<IActionResult> UpdateProfile([FromBody] UProfileDTO profileDto)
         {
             if (profileDto == null)
                 return BadRequest(new { Message = "Profile data is null" });
-
             try
             {
-                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+                var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!int.TryParse(userIdStr, out var userId))
+                    return Unauthorized(new { Message = "Invalid user token" });
+
                 await _accountService.UpdateProfileAsync(userId, profileDto);
                 return Ok(new { Message = "Profile updated successfully" });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error updating profile");
-                return StatusCode(500, new { Message = "Internal server error", Error = ex.Message });
-            }
-        }
-
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteAccount(int id)
-        {
-            try
-            {
-                await _accountService.DeleteAccountAsync(id);
-                return NoContent();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error deleting account with ID {id}");
-                return StatusCode(500, new { Message = "Internal server error", Error = ex.Message });
-            }
-        }
-
-        [HttpGet("user-profile")]
-        [Authorize]
-        public async Task<IActionResult> GetAccountInfo()
-        {
-            try
-            {
-                var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(userIdStr))
-                    return Unauthorized(new { Message = "Unauthorized" });
-
-                var userId = int.Parse(userIdStr);
-                var userProfile = await _accountService.GetUserProfile(userId);
-                if (userProfile == null)
-                    return NotFound(new { Message = "User not found" });
-
-                return Ok(userProfile);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error fetching account info");
-                return StatusCode(500, new { Message = "Internal server error", Error = ex.Message });
+                return StatusCode(500, new { Message = "Internal server error" });
             }
         }
     }

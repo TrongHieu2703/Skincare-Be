@@ -1,5 +1,6 @@
 ﻿using Skincare.BusinessObjects.Entities;
-using Skincare.BusinessObjects.DTOs;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace Skincare.Repositories.Interfaces
 {
@@ -7,11 +8,13 @@ namespace Skincare.Repositories.Interfaces
     {
         Task<IEnumerable<Product>> GetAllProductsAsync(int pageNumber, int pageSize);
         Task<Product> GetProductByIdAsync(int id);
+        Task<IEnumerable<Product>> GetByTypeAsync(int productTypeId);
+
         Task<IEnumerable<Product>> SearchProductsAsync(string keyword);
         Task<IEnumerable<Product>> FilterProductsAsync(string category, bool? inStock, decimal? minPrice, decimal? maxPrice);
-        Task<IEnumerable<Product>> GetByTypeAsync(int productTypeId); 
-        Task<Product> CreateProductAsync(CreateProductDto createProductDto); 
-        Task<Product> UpdateProductAsync(int id, UpdateProductDto updateProductDto); 
+
+        Task<Product> CreateProductAsync(Product product);
+        Task<Product> UpdateProductAsync(Product product);
         Task DeleteProductAsync(int id);
     }
 }
