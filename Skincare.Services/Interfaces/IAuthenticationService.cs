@@ -1,5 +1,6 @@
-﻿using System.Threading.Tasks;
-using Skincare.BusinessObjects.DTOs;
+﻿using Skincare.BusinessObjects.DTOs;
+using Skincare.BusinessObjects.Entities;
+using System.Threading.Tasks;
 
 namespace Skincare.Services.Interfaces
 {
@@ -7,7 +8,6 @@ namespace Skincare.Services.Interfaces
     {
         Task<LoginResponse> LoginAsync(LoginRequest loginRequest);
         Task<LoginResponse> RegisterAsync(RegisterRequest registerRequest);
-        string GenerateJwtToken(Skincare.BusinessObjects.Entities.Account account);
-
+        string GenerateJwtToken(Account account);
     }
 }

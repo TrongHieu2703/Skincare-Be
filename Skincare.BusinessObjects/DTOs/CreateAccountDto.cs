@@ -2,8 +2,8 @@
 
 namespace Skincare.BusinessObjects.DTOs
 {
-    // DTO dành cho người dùng tự đăng ký
-    public class RegisterRequest
+    // DTO dành cho Admin (hoặc 1 luồng đặc biệt) tạo tài khoản
+    public class CreateAccountDto
     {
         [Required, MinLength(3)]
         public string Username { get; set; }

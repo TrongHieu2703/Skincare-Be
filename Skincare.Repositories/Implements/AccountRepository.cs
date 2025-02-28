@@ -1,11 +1,12 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Skincare.BusinessObjects.Entities;
 using Skincare.Repositories.Context;
 using Skincare.Repositories.Interfaces;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace Skincare.Repositories.Implements
 {
@@ -50,31 +51,9 @@ namespace Skincare.Repositories.Implements
         {
             try
             {
-                var account = await _context.Accounts
+                return await _context.Accounts
                     .AsNoTracking()
-                    .Where(a => a.Email == email)
-                    .Select(a => new Account
-                    {
-                        Id = a.Id,
-                        Email = a.Email ?? string.Empty,  // ✅ Fix lỗi NULL
-                        Username = a.Username ?? string.Empty,  // ✅ Fix lỗi NULL
-                        PasswordHash = a.PasswordHash ?? string.Empty, // ✅ Fix lỗi NULL
-                        Role = a.Role ?? "User", // ✅ Fix lỗi NULL
-                        Address = a.Address ?? string.Empty, // ✅ Fix lỗi NULL
-                        PhoneNumber = a.PhoneNumber ?? string.Empty, // ✅ Fix lỗi NULL
-                        Avatar = a.Avatar ?? string.Empty, // ✅ Fix lỗi NULL
-                        Status = a.Status ?? "active", // ✅ Fix lỗi NULL
-                        CreatedAt = a.CreatedAt ?? DateTime.UtcNow, // ✅ Fix NULL thành giá trị mặc định
-                    })
-                    .FirstOrDefaultAsync();
-
-                if (account == null)
-                {
-                    _logger.LogWarning($"No account found for email: {email}");
-                    return null;
-                }
-
-                return account;
+                    .SingleOrDefaultAsync(a => a.Email == email);
             }
             catch (Exception ex)
             {
@@ -82,9 +61,6 @@ namespace Skincare.Repositories.Implements
                 throw;
             }
         }
-
-
-
 
         public async Task<Account> CreateAccountAsync(Account account)
         {
@@ -112,6 +88,17 @@ namespace Skincare.Repositories.Implements
                     return;
                 }
 
+                // Map lại các trường cần update
+                existingAccount.Username = account.Username;
+                existingAccount.Email = account.Email;
+                existingAccount.Avatar = account.Avatar;
+                existingAccount.Address = account.Address;
+                existingAccount.PhoneNumber = account.PhoneNumber;
+                existingAccount.Status = account.Status;
+                existingAccount.PasswordHash = account.PasswordHash;
+                existingAccount.Role = account.Role;
+                // existingAccount.CreatedAt = account.CreatedAt; // Tùy nếu bạn muốn update
+
                 await _context.SaveChangesAsync();
             }
             catch (Exception ex)
@@ -120,9 +107,6 @@ namespace Skincare.Repositories.Implements
                 throw;
             }
         }
-
-
-
 
         public async Task DeleteAccountAsync(int id)
         {

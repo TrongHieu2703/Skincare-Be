@@ -1,9 +1,9 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Skincare.BusinessObjects.DTOs;
-using Skincare.BusinessObjects.Entities;
 using Skincare.Services.Interfaces;
-using System.Collections.Generic;
+using System;
 using System.Security.Claims;
 using System.Threading.Tasks;
 
@@ -55,18 +55,19 @@ namespace Skincare.API.Controllers
             }
         }
 
+        // Giả sử đây là luồng Admin tạo tài khoản
         [HttpPost]
-        public async Task<IActionResult> CreateAccount([FromBody] Account account)
+        public async Task<IActionResult> CreateAccount([FromBody] CreateAccountDto createDto)
         {
-            if (account == null)
-                return BadRequest(new { Message = "Account is null" });
+            if (createDto == null)
+                return BadRequest(new { Message = "Request body is null" });
 
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
             try
             {
-                var createdAccount = await _accountService.CreateAccountAsync(account);
+                var createdAccount = await _accountService.CreateAccountAsync(createDto);
                 return CreatedAtAction(nameof(GetAccountById), new { id = createdAccount.Id }, createdAccount);
             }
             catch (Exception ex)
@@ -96,30 +97,6 @@ namespace Skincare.API.Controllers
             }
         }
 
-        //[HttpPut("change-password")]
-        //[Authorize]
-        //public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto passwordDto)
-        //{
-        //    if (passwordDto == null)
-        //        return BadRequest(new { Message = "Password data is null" });
-
-        //    try
-        //    {
-        //        var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-        //        var result = await _accountService.ChangePasswordAsync(userId, passwordDto);
-        //        if (!result)
-        //            return BadRequest(new { Message = "Incorrect current password or validation failed" });
-
-        //        return Ok(new { Message = "Password changed successfully" });
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, "Error changing password");
-        //        return StatusCode(500, new { Message = "Internal server error", Error = ex.Message });
-        //    }
-        //}
-
-
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteAccount(int id)
         {
@@ -141,11 +118,12 @@ namespace Skincare.API.Controllers
         {
             try
             {
-                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (userId == null)
+                var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (string.IsNullOrEmpty(userIdStr))
                     return Unauthorized(new { Message = "Unauthorized" });
 
-                var userProfile = await _accountService.GetUserProfile(int.Parse(userId));
+                var userId = int.Parse(userIdStr);
+                var userProfile = await _accountService.GetUserProfile(userId);
                 if (userProfile == null)
                     return NotFound(new { Message = "User not found" });
 

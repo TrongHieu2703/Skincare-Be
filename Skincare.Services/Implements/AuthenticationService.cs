@@ -1,16 +1,15 @@
-﻿using Skincare.BusinessObjects.DTOs;
-using Skincare.Services.Interfaces;
-using Skincare.Repositories.Interfaces;
-using System.Threading.Tasks;
+﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Configuration;
-using System.Text;
+using Microsoft.IdentityModel.Tokens;
+using Skincare.BusinessObjects.DTOs;
 using Skincare.BusinessObjects.Entities;
+using Skincare.Repositories.Interfaces;
+using Skincare.Services.Interfaces;
 using System;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using Microsoft.IdentityModel.Tokens;
-using BCrypt.Net;
+using System.Text;
+using System.Threading.Tasks;
 
 namespace Skincare.Services.Implements
 {
@@ -20,7 +19,10 @@ namespace Skincare.Services.Implements
         private readonly ILogger<AuthenticationService> _logger;
         private readonly IConfiguration _configuration;
 
-        public AuthenticationService(IAccountRepository accountRepository, ILogger<AuthenticationService> logger, IConfiguration configuration)
+        public AuthenticationService(
+            IAccountRepository accountRepository,
+            ILogger<AuthenticationService> logger,
+            IConfiguration configuration)
         {
             _accountRepository = accountRepository;
             _logger = logger;
@@ -32,7 +34,7 @@ namespace Skincare.Services.Implements
             try
             {
                 var account = await _accountRepository.GetByEmailAsync(loginRequest.Email);
-                if (account == null || !VerifyPasswordHash(loginRequest.Password, account.PasswordHash))
+                if (account == null || !BCrypt.Net.BCrypt.Verify(loginRequest.Password, account.PasswordHash))
                 {
                     _logger.LogWarning("Invalid login attempt for {Email}", loginRequest.Email);
                     return null;
@@ -59,17 +61,21 @@ namespace Skincare.Services.Implements
         {
             try
             {
-                if (await _accountRepository.GetByEmailAsync(registerRequest.Email) != null)
+                // Kiểm tra email tồn tại
+                var existingAccount = await _accountRepository.GetByEmailAsync(registerRequest.Email);
+                if (existingAccount != null)
                 {
                     _logger.LogWarning("Email already registered: {Email}", registerRequest.Email);
                     return null;
                 }
 
+                var passwordHash = BCrypt.Net.BCrypt.HashPassword(registerRequest.Password);
+
                 var newAccount = new Account
                 {
                     Username = registerRequest.Username,
                     Email = registerRequest.Email,
-                    PasswordHash = HashPassword(registerRequest.Password),
+                    PasswordHash = passwordHash,
                     Role = "User",
                     CreatedAt = DateTime.UtcNow,
                     PhoneNumber = registerRequest.PhoneNumber,
@@ -97,10 +103,6 @@ namespace Skincare.Services.Implements
             }
         }
 
-        private string HashPassword(string password) => BCrypt.Net.BCrypt.HashPassword(password);
-
-        private bool VerifyPasswordHash(string password, string storedHash) => BCrypt.Net.BCrypt.Verify(password, storedHash);
-
         public string GenerateJwtToken(Account account)
         {
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]));
@@ -115,9 +117,9 @@ namespace Skincare.Services.Implements
             };
 
             var token = new JwtSecurityToken(
-                _configuration["Jwt:Issuer"],
-                _configuration["Jwt:Audience"],
-                claims,
+                issuer: _configuration["Jwt:Issuer"],
+                audience: _configuration["Jwt:Audience"],
+                claims: claims,
                 expires: DateTime.UtcNow.AddHours(2),
                 signingCredentials: credentials
             );

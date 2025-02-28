@@ -1,13 +1,14 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Skincare.Services.Interfaces;
-using Skincare.BusinessObjects.DTOs;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Skincare.BusinessObjects.DTOs;
+using Skincare.Services.Interfaces;
+using System;
+using System.Threading.Tasks;
 
 namespace Skincare.API.Controllers
 {
     [ApiController]
-    [Route("api/authentication")]
+    [Route("api/[controller]")]
     public class AuthenticationController : ControllerBase
     {
         private readonly IAuthenticationService _authenticationService;
@@ -64,8 +65,7 @@ namespace Skincare.API.Controllers
         [HttpPost("logout")]
         public IActionResult Logout()
         {
-            // Đăng xuất thường không cần xử lý phức tạp vì JWT là stateless.
-            // Bạn có thể xử lý phía client bằng cách xóa token khỏi localStorage/sessionStorage.
+            // Với JWT (stateless), logout thường do client tự xóa token
             return Ok(new { Message = "Logged out successfully." });
         }
     }
