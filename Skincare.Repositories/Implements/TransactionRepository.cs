@@ -1,7 +1,9 @@
-﻿using Skincare.BusinessObjects.DTOs;
+﻿using Microsoft.EntityFrameworkCore;
+using Skincare.BusinessObjects.DTOs;
 using Skincare.BusinessObjects.Entities;
 using Skincare.Repositories.Context;
 using Skincare.Repositories.Interfaces;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -19,7 +21,7 @@ namespace Skincare.Repositories.Implements
 
         public async Task<IEnumerable<TransactionDto>> GetTransactionsByOrderIdAsync(int orderId)
         {
-            return await Task.FromResult(_context.Transactions
+            return await _context.Transactions
                 .Where(t => t.OrderId == orderId)
                 .Select(t => new TransactionDto
                 {
@@ -30,7 +32,7 @@ namespace Skincare.Repositories.Implements
                     Status = t.Status,
                     CreatedDate = t.CreatedDate
                 })
-                .ToList());
+                .ToListAsync();
         }
 
         public async Task<TransactionDto> CreateTransactionAsync(CreateTransactionDto createTransactionDto)
@@ -60,7 +62,7 @@ namespace Skincare.Repositories.Implements
 
         public async Task<TransactionDto> UpdateTransactionAsync(int id, UpdateTransactionDto updateTransactionDto)
         {
-            var transaction = _context.Transactions.FirstOrDefault(t => t.TransactionId == id);
+            var transaction = await _context.Transactions.FirstOrDefaultAsync(t => t.TransactionId == id);
             if (transaction == null) return null;
 
             transaction.PaymentMethod = updateTransactionDto.PaymentMethod;
@@ -82,7 +84,7 @@ namespace Skincare.Repositories.Implements
 
         public async Task DeleteTransactionAsync(int id)
         {
-            var transaction = _context.Transactions.FirstOrDefault(t => t.TransactionId == id);
+            var transaction = await _context.Transactions.FirstOrDefaultAsync(t => t.TransactionId == id);
             if (transaction != null)
             {
                 _context.Transactions.Remove(transaction);

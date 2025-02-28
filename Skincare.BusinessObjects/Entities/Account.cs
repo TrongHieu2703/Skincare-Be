@@ -27,14 +27,6 @@ public partial class Account
 
     public string PasswordHash { get; set; }
 
-    public string RefreshToken { get; set; }
-
-    public DateTime? RefreshTokenExpiry { get; set; }
-
-    public string OtpCode { get; set; }
-
-    public DateTime? OtpExpiry { get; set; }
-
     public virtual ICollection<BlogPost> BlogPosts { get; set; } = new List<BlogPost>();
 
     public virtual ICollection<Cart> Carts { get; set; } = new List<Cart>();

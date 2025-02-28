@@ -1,4 +1,6 @@
-﻿namespace Skincare.BusinessObjects.DTOs
+﻿using System;
+
+namespace Skincare.BusinessObjects.DTOs
 {
     public class AccountDto
     {
@@ -8,8 +10,8 @@
         public string Address { get; set; }
         public string Avatar { get; set; }
         public string PhoneNumber { get; set; }
-        public string Status { get; set; }  // Active, Inactive
-        public string Role { get; set; }    // User, Admin
+        public string Status { get; set; }
         public DateTime? CreatedAt { get; set; }
+        public string Role { get; set; }
     }
 }

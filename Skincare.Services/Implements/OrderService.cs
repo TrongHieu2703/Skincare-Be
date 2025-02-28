@@ -1,8 +1,9 @@
-﻿using Skincare.BusinessObjects.DTOs;
+﻿using Microsoft.Extensions.Logging;
+using Skincare.BusinessObjects.DTOs;
 using Skincare.BusinessObjects.Entities;
 using Skincare.Repositories.Interfaces;
 using Skincare.Services.Interfaces;
-using Microsoft.Extensions.Logging;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -32,18 +33,36 @@ namespace Skincare.Services.Implements
             return order != null ? MapToDto(order) : null;
         }
 
-        public async Task<OrderDto> CreateOrderAsync(CreateOrderDto createOrderDto)
+        public async Task<IEnumerable<OrderDto>> GetOrdersByUserIdAsync(int userId)
         {
+            var orders = await _orderRepository.GetOrdersByUserIdAsync(userId);
+            return orders.Select(MapToDto).ToList();
+        }
+
+        public async Task<OrderDto> CreateOrderAsync(CreateOrderDto orderDto)
+        {
+            // Chuyển đổi DTO sang Entity
             var order = new Order
             {
-                CustomerId = createOrderDto.CustomerId,
-                VoucherId = createOrderDto.VoucherId,
-                IsPrepaid = createOrderDto.IsPrepaid,
-                Status = "Pending",
-                OrderItems = createOrderDto.OrderItems.Select(item => new OrderItem
+                CustomerId = orderDto.CustomerId,
+                VoucherId = orderDto.VoucherId,
+                TotalPrice = orderDto.TotalPrice,
+                DiscountPrice = orderDto.DiscountPrice,
+                TotalAmount = orderDto.TotalPrice - (orderDto.DiscountPrice ?? 0),
+                IsPrepaid = orderDto.IsPrepaid,
+                Status = "Pending",  // Mặc định Pending
+                UpdatedAt = DateTime.UtcNow,
+                OrderItems = orderDto.OrderItems.Select(item => new OrderItem
                 {
                     ProductId = item.ProductId,
                     ItemQuantity = item.ItemQuantity
+                }).ToList(),
+                Transactions = orderDto.Transactions.Select(tx => new Transaction
+                {
+                    PaymentMethod = tx.PaymentMethod,
+                    Status = tx.Status,
+                    Amount = tx.Amount,
+                    CreatedDate = tx.CreatedDate ?? DateTime.UtcNow
                 }).ToList()
             };
 
@@ -51,12 +70,12 @@ namespace Skincare.Services.Implements
             return MapToDto(createdOrder);
         }
 
-        public async Task<OrderDto> UpdateOrderAsync(int id, UpdateOrderDto updateOrderDto)
+        public async Task<OrderDto> UpdateOrderAsync(int id, UpdateOrderDto orderDto)
         {
             var existingOrder = await _orderRepository.GetOrderByIdAsync(id);
             if (existingOrder == null) return null;
 
-            var updatedOrder = await _orderRepository.UpdateOrderAsync(existingOrder, updateOrderDto);
+            var updatedOrder = await _orderRepository.UpdateOrderAsync(existingOrder, orderDto);
             return MapToDto(updatedOrder);
         }
 
@@ -82,6 +101,15 @@ namespace Skincare.Services.Implements
                 {
                     ProductId = oi.ProductId,
                     ItemQuantity = oi.ItemQuantity
+                }).ToList(),
+                Transactions = order.Transactions.Select(tx => new TransactionDto
+                {
+                    TransactionId = tx.TransactionId,
+                    OrderId = tx.OrderId,
+                    PaymentMethod = tx.PaymentMethod,
+                    Amount = tx.Amount,
+                    Status = tx.Status,
+                    CreatedDate = tx.CreatedDate
                 }).ToList()
             };
         }

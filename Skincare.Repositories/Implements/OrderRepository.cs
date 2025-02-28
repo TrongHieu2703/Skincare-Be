@@ -1,22 +1,22 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Skincare.BusinessObjects.DTOs;
 using Skincare.BusinessObjects.Entities;
 using Skincare.Repositories.Context;
 using Skincare.Repositories.Interfaces;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
-using Skincare.BusinessObjects.DTOs;
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace Skincare.Repositories.Implements
 {
     public class OrderRepository : IOrderRepository
     {
         private readonly SWP391Context _context;
-        private readonly ILogger<OrderRepository> _logger;
+        private readonly Microsoft.Extensions.Logging.ILogger<OrderRepository> _logger;
 
-        public OrderRepository(SWP391Context context, ILogger<OrderRepository> logger)
+        public OrderRepository(SWP391Context context, Microsoft.Extensions.Logging.ILogger<OrderRepository> logger)
         {
             _context = context;
             _logger = logger;
@@ -58,13 +58,14 @@ namespace Skincare.Repositories.Implements
         {
             try
             {
+                // Kiểm tra voucher tồn tại nếu có
                 if (order.VoucherId.HasValue)
                 {
-                    var voucherExists = await _context.Vouchers.AnyAsync(v => v.Id == order.VoucherId);
+                    var voucherExists = await _context.Vouchers.AnyAsync(v => v.Id == order.VoucherId.Value);
                     if (!voucherExists)
                     {
+                        _logger.LogWarning($"Voucher with ID {order.VoucherId.Value} does not exist. Skipping voucher.");
                         order.VoucherId = null;
-                        _logger.LogWarning($"Voucher with ID {order.VoucherId} does not exist. Skipping voucher.");
                     }
                 }
 
@@ -79,35 +80,36 @@ namespace Skincare.Repositories.Implements
             }
         }
 
-        public async Task<Order> UpdateOrderAsync(Order existingOrder, UpdateOrderDto updatedOrder)
+        public async Task<Order> UpdateOrderAsync(Order existingOrder, UpdateOrderDto updateOrderDto)
         {
             try
             {
                 if (existingOrder == null)
-                    throw new Exception($"Order not found");
+                    throw new Exception("Order not found");
 
-                existingOrder.VoucherId = updatedOrder.VoucherId ?? existingOrder.VoucherId;
-                existingOrder.Status = updatedOrder.Status ?? existingOrder.Status;
-                existingOrder.TotalPrice = updatedOrder.TotalPrice ?? existingOrder.TotalPrice;
-                existingOrder.DiscountPrice = updatedOrder.DiscountPrice ?? existingOrder.DiscountPrice;
-                existingOrder.TotalAmount = updatedOrder.TotalAmount ?? existingOrder.TotalAmount;
-                existingOrder.IsPrepaid = updatedOrder.IsPrepaid ?? existingOrder.IsPrepaid;
+                // Cập nhật thông tin đơn hàng
+                existingOrder.VoucherId = updateOrderDto.VoucherId ?? existingOrder.VoucherId;
+                existingOrder.Status = updateOrderDto.Status ?? existingOrder.Status;
+                existingOrder.TotalPrice = updateOrderDto.TotalPrice ?? existingOrder.TotalPrice;
+                existingOrder.DiscountPrice = updateOrderDto.DiscountPrice ?? existingOrder.DiscountPrice;
+                existingOrder.TotalAmount = updateOrderDto.TotalAmount ?? existingOrder.TotalPrice - (updateOrderDto.DiscountPrice ?? 0);
+                existingOrder.IsPrepaid = updateOrderDto.IsPrepaid ?? existingOrder.IsPrepaid;
                 existingOrder.UpdatedAt = DateTime.UtcNow;
 
-                // Xóa OrderItems & Transactions cũ
+                // Xóa các OrderItems & Transactions cũ (nếu cập nhật toàn bộ)
                 _context.OrderItems.RemoveRange(existingOrder.OrderItems);
                 _context.Transactions.RemoveRange(existingOrder.Transactions);
                 await _context.SaveChangesAsync();
 
                 // Thêm OrderItems mới
-                existingOrder.OrderItems = updatedOrder.OrderItems.Select(item => new OrderItem
+                existingOrder.OrderItems = updateOrderDto.OrderItems.Select(item => new OrderItem
                 {
                     ProductId = item.ProductId,
                     ItemQuantity = item.ItemQuantity
                 }).ToList();
 
                 // Thêm Transactions mới
-                existingOrder.Transactions = updatedOrder.Transactions.Select(tx => new Transaction
+                existingOrder.Transactions = updateOrderDto.Transactions.Select(tx => new Transaction
                 {
                     PaymentMethod = tx.PaymentMethod,
                     Status = tx.Status,
@@ -115,7 +117,6 @@ namespace Skincare.Repositories.Implements
                     CreatedDate = tx.CreatedDate ?? DateTime.UtcNow
                 }).ToList();
 
-                // Save lại đơn hàng sau khi cập nhật
                 _context.Orders.Update(existingOrder);
                 await _context.SaveChangesAsync();
 
@@ -145,5 +146,23 @@ namespace Skincare.Repositories.Implements
                 throw;
             }
         }
+
+        public async Task<IEnumerable<Order>> GetOrdersByUserIdAsync(int userId)
+{
+    try
+    {
+        return await _context.Orders
+            .Where(o => o.CustomerId == userId)
+            .Include(o => o.OrderItems)
+            .Include(o => o.Transactions)
+            .ToListAsync();
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, $"Error fetching orders for user {userId}");
+        throw;
+    }
+}
+
     }
 }

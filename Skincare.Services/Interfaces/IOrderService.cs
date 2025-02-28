@@ -1,5 +1,4 @@
 ﻿using Skincare.BusinessObjects.DTOs;
-using Skincare.BusinessObjects.Entities;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -12,5 +11,8 @@ namespace Skincare.Services.Interfaces
         Task<OrderDto> CreateOrderAsync(CreateOrderDto orderDto);
         Task<OrderDto> UpdateOrderAsync(int id, UpdateOrderDto orderDto);
         Task DeleteOrderAsync(int id);
+
+        // Mới: Lấy đơn hàng của user
+        Task<IEnumerable<OrderDto>> GetOrdersByUserIdAsync(int userId);
     }
 }

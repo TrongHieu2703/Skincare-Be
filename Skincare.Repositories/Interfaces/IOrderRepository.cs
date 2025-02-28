@@ -1,7 +1,7 @@
-﻿using System.Collections.Generic;
-using System.Threading.Tasks;
+﻿using Skincare.BusinessObjects.Entities;
 using Skincare.BusinessObjects.DTOs;
-using Skincare.BusinessObjects.Entities;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace Skincare.Repositories.Interfaces
 {
@@ -12,5 +12,8 @@ namespace Skincare.Repositories.Interfaces
         Task<Order> CreateOrderAsync(Order order);
         Task<Order> UpdateOrderAsync(Order existingOrder, UpdateOrderDto updateOrderDto);
         Task DeleteOrderAsync(int id);
+
+        // Mới: Lấy đơn hàng của user
+        Task<IEnumerable<Order>> GetOrdersByUserIdAsync(int userId);
     }
 }

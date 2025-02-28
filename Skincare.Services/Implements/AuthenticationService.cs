@@ -1,16 +1,15 @@
-﻿using Skincare.BusinessObjects.DTOs;
-using Skincare.Services.Interfaces;
-using Skincare.Repositories.Interfaces;
-using System.Threading.Tasks;
+﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Configuration;
-using System.Security.Cryptography;
-using System.Text;
+using Microsoft.IdentityModel.Tokens;
+using Skincare.BusinessObjects.DTOs;
 using Skincare.BusinessObjects.Entities;
+using Skincare.Repositories.Interfaces;
+using Skincare.Services.Interfaces;
 using System;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using Microsoft.IdentityModel.Tokens;
+using System.Text;
+using System.Threading.Tasks;
 
 namespace Skincare.Services.Implements
 {
@@ -19,35 +18,29 @@ namespace Skincare.Services.Implements
         private readonly IAccountRepository _accountRepository;
         private readonly ILogger<AuthenticationService> _logger;
         private readonly IConfiguration _configuration;
-        private readonly IEmailService _emailService;
 
-        public AuthenticationService(IAccountRepository accountRepository, ILogger<AuthenticationService> logger, IConfiguration configuration, IEmailService emailService)
+        public AuthenticationService(
+            IAccountRepository accountRepository,
+            ILogger<AuthenticationService> logger,
+            IConfiguration configuration)
         {
             _accountRepository = accountRepository;
             _logger = logger;
             _configuration = configuration;
-            _emailService = emailService;
         }
 
         public async Task<LoginResponse> LoginAsync(LoginRequest loginRequest)
         {
             try
             {
-                _logger.LogInformation($"Attempting login for: {loginRequest.Email}");
                 var account = await _accountRepository.GetByEmailAsync(loginRequest.Email);
-
-                if (account == null || string.IsNullOrEmpty(account.PasswordHash) || !VerifyPasswordHash(loginRequest.Password, account.PasswordHash))
+                if (account == null || !BCrypt.Net.BCrypt.Verify(loginRequest.Password, account.PasswordHash))
                 {
-                    _logger.LogWarning("Invalid login attempt");
+                    _logger.LogWarning("Invalid login attempt for {Email}", loginRequest.Email);
                     return null;
                 }
 
-                _logger.LogInformation($"DEBUG ACCOUNT DATA: ID: {account.Id}, Email: {account.Email}, Username: {account.Username}, " +
-                    $"PasswordHash: {account.PasswordHash}, Role: {account.Role}, Status: {account.Status}, Address: {account.Address}, " +
-                    $"PhoneNumber: {account.PhoneNumber}, CreatedAt: {account.CreatedAt}, RefreshToken: {account.RefreshToken}, RefreshTokenExpiry: {account.RefreshTokenExpiry}");
-
                 var token = GenerateJwtToken(account);
-
                 return new LoginResponse
                 {
                     Token = token,
@@ -64,32 +57,44 @@ namespace Skincare.Services.Implements
             }
         }
 
-        public async Task<bool> RegisterAsync(RegisterRequest registerRequest)
+        public async Task<LoginResponse> RegisterAsync(RegisterRequest registerRequest)
         {
             try
             {
+                // Kiểm tra email tồn tại
                 var existingAccount = await _accountRepository.GetByEmailAsync(registerRequest.Email);
                 if (existingAccount != null)
                 {
-                    _logger.LogWarning("Email already registered");
-                    return false;
+                    _logger.LogWarning("Email already registered: {Email}", registerRequest.Email);
+                    return null;
                 }
+
+                var passwordHash = BCrypt.Net.BCrypt.HashPassword(registerRequest.Password);
 
                 var newAccount = new Account
                 {
                     Username = registerRequest.Username,
                     Email = registerRequest.Email,
-                    PasswordHash = CreatePasswordHash(registerRequest.Password),
+                    PasswordHash = passwordHash,
                     Role = "User",
                     CreatedAt = DateTime.UtcNow,
                     PhoneNumber = registerRequest.PhoneNumber,
                     Address = registerRequest.Address,
                     Avatar = registerRequest.Avatar,
-                    Status = "active" 
+                    Status = "active"
                 };
 
                 await _accountRepository.CreateAccountAsync(newAccount);
-                return true;
+                var token = GenerateJwtToken(newAccount);
+
+                return new LoginResponse
+                {
+                    Token = token,
+                    Role = newAccount.Role,
+                    Username = newAccount.Username,
+                    Expiration = DateTime.UtcNow.AddHours(2),
+                    Message = "Registration successful"
+                };
             }
             catch (Exception ex)
             {
@@ -98,90 +103,28 @@ namespace Skincare.Services.Implements
             }
         }
 
-        public async Task<bool> ForgotPasswordAsync(ForgotPasswordRequest request)
+        public string GenerateJwtToken(Account account)
         {
-            var account = await _accountRepository.GetByEmailAsync(request.Email);
-            if (account == null)
-            {
-                _logger.LogWarning("Email not found for password reset");
-                return false;
-            }
-
-            var otp = GenerateOtp();
-            account.OtpCode = otp;
-            account.OtpExpiry = DateTime.UtcNow.AddMinutes(10);
-            await _accountRepository.UpdateAccountAsync(account);
-
-            // TODO: Send OTP to email
-            var emailSubject = "Your Password Reset OTP";
-            var emailBody = $"Your OTP code is {otp}. It is valid for 10 minutes.";
-            await _emailService.SendEmailAsync(account.Email, emailSubject, emailBody);
-
-            _logger.LogInformation($"OTP sent to {request.Email}: {otp}");
-
-            return true;
-        }
-
-        public async Task<bool> ResetPasswordAsync(ResetPasswordRequest request)
-        {
-            var account = await _accountRepository.GetByEmailAsync(request.Email);
-
-            if (account == null || account.OtpCode != request.OtpCode || account.OtpExpiry < DateTime.UtcNow)
-            {
-                _logger.LogWarning("Invalid OTP or email for password reset");
-                return false;
-            }
-
-            account.PasswordHash = CreatePasswordHash(request.NewPassword);
-            account.OtpCode = null;
-            account.OtpExpiry = null;
-            await _accountRepository.UpdateAccountAsync(account);
-
-            return true;
-        }
-
-        private string CreatePasswordHash(string password) => BCrypt.Net.BCrypt.HashPassword(password);
-
-        private bool VerifyPasswordHash(string password, string storedHash) => BCrypt.Net.BCrypt.Verify(password, storedHash);
-
-        private string GenerateJwtToken(Account account)
-        {
-            var tokenHandler = new JwtSecurityTokenHandler();
-            var key = Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]);
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]));
+            var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
             var claims = new[]
             {
-            new Claim(ClaimTypes.NameIdentifier, account.Id.ToString()),
-            new Claim(ClaimTypes.Name, account.Username),
-            new Claim(ClaimTypes.Email, account.Email),
-            new Claim(ClaimTypes.Role, account.Role)
-        };
-
-            var tokenDescriptor = new SecurityTokenDescriptor
-            {
-                Subject = new ClaimsIdentity(claims),
-                Expires = DateTime.UtcNow.AddHours(2),
-                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+                new Claim(ClaimTypes.NameIdentifier, account.Id.ToString()),
+                new Claim(ClaimTypes.Email, account.Email),
+                new Claim(ClaimTypes.Name, account.Username),
+                new Claim(ClaimTypes.Role, account.Role)
             };
 
-            var token = tokenHandler.CreateToken(tokenDescriptor);
-            return tokenHandler.WriteToken(token);
-        }
+            var token = new JwtSecurityToken(
+                issuer: _configuration["Jwt:Issuer"],
+                audience: _configuration["Jwt:Audience"],
+                claims: claims,
+                expires: DateTime.UtcNow.AddHours(2),
+                signingCredentials: credentials
+            );
 
-        //private string GenerateRefreshToken()
-        //{
-        //    var randomBytes = new byte[64];
-        //    using (var rng = RandomNumberGenerator.Create())
-        //    {
-        //        rng.GetBytes(randomBytes);
-        //        return Convert.ToBase64String(randomBytes);
-        //    }
-        //}
-
-        private string GenerateOtp()
-        {
-            var random = new Random();
-            return random.Next(100000, 999999).ToString();
+            return new JwtSecurityTokenHandler().WriteToken(token);
         }
     }
 }

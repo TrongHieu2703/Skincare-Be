@@ -9,39 +9,44 @@ namespace Skincare.API.Controllers
     [ApiController]
     public class TransactionController : ControllerBase
     {
-        private readonly ITransactionService _transactionService;
+         private readonly ITransactionService _transactionService;
+         public TransactionController(ITransactionService transactionService)
+         {
+              _transactionService = transactionService;
+         }
 
-        public TransactionController(ITransactionService transactionService)
-        {
-            _transactionService = transactionService;
-        }
+         [HttpGet("{orderId}")]
+         public async Task<IActionResult> GetTransactionsByOrderId(int orderId)
+         {
+              var transactions = await _transactionService.GetTransactionsByOrderIdAsync(orderId);
+              return Ok(transactions);
+         }
 
-        [HttpGet("{orderId}")]
-        public async Task<IActionResult> GetTransactionsByOrderId(int orderId)
-        {
-            var transactions = await _transactionService.GetTransactionsByOrderIdAsync(orderId);
-            return Ok(transactions);
-        }
+         [HttpPost]
+         public async Task<IActionResult> CreateTransaction([FromBody] CreateTransactionDto createTransactionDto)
+         {
+              if (createTransactionDto == null)
+                  return BadRequest("Transaction data is null");
+              if (!ModelState.IsValid)
+                  return BadRequest(ModelState);
+              var transaction = await _transactionService.CreateTransactionAsync(createTransactionDto);
+              return CreatedAtAction(nameof(GetTransactionsByOrderId), new { orderId = transaction.OrderId }, transaction);
+         }
 
-        [HttpPost]
-        public async Task<IActionResult> CreateTransaction([FromBody] CreateTransactionDto createTransactionDto)
-        {
-            var transaction = await _transactionService.CreateTransactionAsync(createTransactionDto);
-            return CreatedAtAction(nameof(GetTransactionsByOrderId), new { orderId = transaction.OrderId }, transaction);
-        }
+         [HttpPut("{id}")]
+         public async Task<IActionResult> UpdateTransaction(int id, [FromBody] UpdateTransactionDto updateTransactionDto)
+         {
+              if (updateTransactionDto == null)
+                  return BadRequest("Update data is null");
+              var updatedTransaction = await _transactionService.UpdateTransactionAsync(id, updateTransactionDto);
+              return Ok(updatedTransaction);
+         }
 
-        [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateTransaction(int id, [FromBody] UpdateTransactionDto updateTransactionDto)
-        {
-            var updatedTransaction = await _transactionService.UpdateTransactionAsync(id, updateTransactionDto);
-            return Ok(updatedTransaction);
-        }
-
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteTransaction(int id)
-        {
-            await _transactionService.DeleteTransactionAsync(id);
-            return NoContent();
-        }
+         [HttpDelete("{id}")]
+         public async Task<IActionResult> DeleteTransaction(int id)
+         {
+              await _transactionService.DeleteTransactionAsync(id);
+              return NoContent();
+         }
     }
 }

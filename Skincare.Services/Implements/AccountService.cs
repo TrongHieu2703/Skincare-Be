@@ -1,11 +1,12 @@
-﻿using Skincare.BusinessObjects.Entities;
-using Skincare.Services.Interfaces;
-using Skincare.Repositories.Interfaces;
-using System.Collections.Generic;
-using System.Threading.Tasks;
+﻿using Microsoft.Extensions.Logging;
 using Skincare.BusinessObjects.DTOs;
-using Microsoft.Extensions.Logging;
+using Skincare.BusinessObjects.Entities;
+using Skincare.Repositories.Interfaces;
+using Skincare.Services.Interfaces;
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace Skincare.Services.Implements
 {
@@ -20,12 +21,28 @@ namespace Skincare.Services.Implements
             _logger = logger;
         }
 
-        public async Task<IEnumerable<Account>> GetAllAccountsAsync()
+        public async Task<IEnumerable<AccountDto>> GetAllAccountsAsync()
         {
             try
             {
                 _logger.LogInformation("Fetching all accounts.");
-                return await _accountRepository.GetAllAccountsAsync();
+                var accounts = await _accountRepository.GetAllAccountsAsync();
+
+                // Convert Entity -> DTO
+                var result = accounts.Select(a => new AccountDto
+                {
+                    Id = a.Id,
+                    Username = a.Username,
+                    Email = a.Email,
+                    Address = a.Address,
+                    Avatar = a.Avatar,
+                    PhoneNumber = a.PhoneNumber,
+                    Status = a.Status,
+                    CreatedAt = a.CreatedAt,
+                    Role = a.Role
+                });
+
+                return result;
             }
             catch (Exception ex)
             {
@@ -34,12 +51,26 @@ namespace Skincare.Services.Implements
             }
         }
 
-        public async Task<Account> GetAccountByIdAsync(int id)
+        public async Task<AccountDto> GetAccountByIdAsync(int id)
         {
             try
             {
                 _logger.LogInformation($"Fetching account with ID: {id}");
-                return await _accountRepository.GetAccountByIdAsync(id);
+                var account = await _accountRepository.GetAccountByIdAsync(id);
+                if (account == null) return null;
+
+                return new AccountDto
+                {
+                    Id = account.Id,
+                    Username = account.Username,
+                    Email = account.Email,
+                    Address = account.Address,
+                    Avatar = account.Avatar,
+                    PhoneNumber = account.PhoneNumber,
+                    Status = account.Status,
+                    CreatedAt = account.CreatedAt,
+                    Role = account.Role
+                };
             }
             catch (Exception ex)
             {
@@ -48,12 +79,26 @@ namespace Skincare.Services.Implements
             }
         }
 
-        public async Task<Account> GetByEmailAsync(string email)
+        public async Task<AccountDto> GetByEmailAsync(string email)
         {
             try
             {
                 _logger.LogInformation($"Fetching account with email: {email}");
-                return await _accountRepository.GetByEmailAsync(email);
+                var account = await _accountRepository.GetByEmailAsync(email);
+                if (account == null) return null;
+
+                return new AccountDto
+                {
+                    Id = account.Id,
+                    Username = account.Username,
+                    Email = account.Email,
+                    Address = account.Address,
+                    Avatar = account.Avatar,
+                    PhoneNumber = account.PhoneNumber,
+                    Status = account.Status,
+                    CreatedAt = account.CreatedAt,
+                    Role = account.Role
+                };
             }
             catch (Exception ex)
             {
@@ -62,33 +107,50 @@ namespace Skincare.Services.Implements
             }
         }
 
-        public async Task<Account> CreateAccountAsync(Account account)
+        public async Task<AccountDto> CreateAccountAsync(CreateAccountDto createDto)
         {
             try
             {
-                _logger.LogInformation($"Creating account for email: {account.Email}");
+                _logger.LogInformation($"Creating account for email: {createDto.Email}");
+
+                // Hash password
+                var passwordHash = BCrypt.Net.BCrypt.HashPassword(createDto.Password);
 
                 var newAccount = new Account
                 {
-                    Username = account.Username,
-                    Email = account.Email,
-                    PasswordHash = account.PasswordHash,
-                    Role = "User", // ✅ Role mặc định
-                    Address = null, // Để null cho người dùng tự cập nhật sau
-                    Avatar = null,
-                    PhoneNumber = null,
-                    CreatedAt = DateTime.UtcNow
+                    Username = createDto.Username,
+                    Email = createDto.Email,
+                    PasswordHash = passwordHash,
+                    Role = "User", // hoặc tuỳ logic
+                    Address = createDto.Address,
+                    Avatar = createDto.Avatar,
+                    PhoneNumber = createDto.PhoneNumber,
+                    CreatedAt = DateTime.UtcNow,
+                    Status = "active"
                 };
 
-                return await _accountRepository.CreateAccountAsync(newAccount);
+                var createdAccount = await _accountRepository.CreateAccountAsync(newAccount);
+
+                // Convert Entity -> DTO
+                return new AccountDto
+                {
+                    Id = createdAccount.Id,
+                    Username = createdAccount.Username,
+                    Email = createdAccount.Email,
+                    Address = createdAccount.Address,
+                    Avatar = createdAccount.Avatar,
+                    PhoneNumber = createdAccount.PhoneNumber,
+                    Status = createdAccount.Status,
+                    CreatedAt = createdAccount.CreatedAt,
+                    Role = createdAccount.Role
+                };
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"An error occurred while creating account for email: {account.Email}");
+                _logger.LogError(ex, $"An error occurred while creating account for email: {createDto.Email}");
                 throw;
             }
         }
-
 
         public async Task UpdateProfileAsync(int userId, UProfileDTO profileDto)
         {
@@ -98,11 +160,11 @@ namespace Skincare.Services.Implements
                 if (account == null)
                     throw new Exception($"User ID {userId} not found");
 
-                account.Username = profileDto.Username;
-                account.Email = profileDto.Email;
-                account.Address = profileDto.Address;
-                account.Avatar = profileDto.Avatar;
-                account.PhoneNumber = profileDto.PhoneNumber;
+                account.Username = profileDto.Username ?? account.Username;
+                account.Email = profileDto.Email ?? account.Email;
+                account.Address = profileDto.Address ?? account.Address;
+                account.Avatar = profileDto.Avatar ?? account.Avatar;
+                account.PhoneNumber = profileDto.PhoneNumber ?? account.PhoneNumber;
 
                 await _accountRepository.UpdateAccountAsync(account);
             }
@@ -112,32 +174,6 @@ namespace Skincare.Services.Implements
                 throw;
             }
         }
-
-        public async Task<bool> ChangePasswordAsync(int userId, ChangePasswordDto passwordDto)
-        {
-            try
-            {
-                var account = await _accountRepository.GetAccountByIdAsync(userId);
-                if (account == null)
-                    throw new Exception($"User ID {userId} not found");
-
-                // Kiểm tra mật khẩu hiện tại
-                if (!BCrypt.Net.BCrypt.Verify(passwordDto.CurrentPassword, account.PasswordHash))
-                    return false;
-
-                // Cập nhật mật khẩu mới
-                account.PasswordHash = BCrypt.Net.BCrypt.HashPassword(passwordDto.NewPassword);
-                await _accountRepository.UpdateAccountAsync(account);
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error changing password for User ID {userId}");
-                throw;
-            }
-        }
-
 
         public async Task DeleteAccountAsync(int id)
         {

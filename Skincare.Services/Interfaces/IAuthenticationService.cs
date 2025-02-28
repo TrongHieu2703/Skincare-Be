@@ -1,14 +1,13 @@
-﻿using System.Threading.Tasks;
-using Skincare.BusinessObjects.DTOs;
+﻿using Skincare.BusinessObjects.DTOs;
+using Skincare.BusinessObjects.Entities;
+using System.Threading.Tasks;
 
 namespace Skincare.Services.Interfaces
 {
     public interface IAuthenticationService
     {
         Task<LoginResponse> LoginAsync(LoginRequest loginRequest);
-        Task<bool> RegisterAsync(RegisterRequest registerRequest);
-        //Task<LoginResponse> RefreshTokenAsync(RefreshTokenRequest refreshTokenRequest);
-        Task<bool> ForgotPasswordAsync(ForgotPasswordRequest request);
-        Task<bool> ResetPasswordAsync(ResetPasswordRequest request);
+        Task<LoginResponse> RegisterAsync(RegisterRequest registerRequest);
+        string GenerateJwtToken(Account account);
     }
 }

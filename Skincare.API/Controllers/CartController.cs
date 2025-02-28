@@ -1,8 +1,8 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Skincare.BusinessObjects.DTOs;
 using Skincare.Services.Interfaces;
-using Microsoft.Extensions.Logging;
 using System;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -46,7 +46,6 @@ namespace Skincare.API.Controllers
                 var cart = await _cartService.GetCartByIdAsync(id);
                 if (cart == null)
                     return NotFound("Cart not found");
-
                 return Ok(cart);
             }
             catch (Exception ex)
@@ -61,8 +60,8 @@ namespace Skincare.API.Controllers
         {
             try
             {
-                var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (!int.TryParse(userIdString, out var userId))
+                var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!int.TryParse(userIdStr, out var userId))
                     return Unauthorized("Invalid user token");
 
                 var carts = await _cartService.GetCartsByUserIdAsync(userId);
@@ -81,8 +80,8 @@ namespace Skincare.API.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (!int.TryParse(userIdString, out var userId))
+            var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!int.TryParse(userIdStr, out var userId))
                 return Unauthorized("Invalid user token");
 
             try
@@ -111,7 +110,6 @@ namespace Skincare.API.Controllers
                 var updatedCart = await _cartService.UpdateCartAsync(dto);
                 if (updatedCart == null)
                     return NotFound("Cart not found");
-
                 return Ok(updatedCart);
             }
             catch (Exception ex)
