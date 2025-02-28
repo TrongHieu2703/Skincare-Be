@@ -96,28 +96,28 @@ namespace Skincare.API.Controllers
             }
         }
 
-        [HttpPut("change-password")]
-        [Authorize]
-        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto passwordDto)
-        {
-            if (passwordDto == null)
-                return BadRequest(new { Message = "Password data is null" });
+        //[HttpPut("change-password")]
+        //[Authorize]
+        //public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto passwordDto)
+        //{
+        //    if (passwordDto == null)
+        //        return BadRequest(new { Message = "Password data is null" });
 
-            try
-            {
-                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-                var result = await _accountService.ChangePasswordAsync(userId, passwordDto);
-                if (!result)
-                    return BadRequest(new { Message = "Incorrect current password or validation failed" });
+        //    try
+        //    {
+        //        var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+        //        var result = await _accountService.ChangePasswordAsync(userId, passwordDto);
+        //        if (!result)
+        //            return BadRequest(new { Message = "Incorrect current password or validation failed" });
 
-                return Ok(new { Message = "Password changed successfully" });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error changing password");
-                return StatusCode(500, new { Message = "Internal server error", Error = ex.Message });
-            }
-        }
+        //        return Ok(new { Message = "Password changed successfully" });
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Error changing password");
+        //        return StatusCode(500, new { Message = "Internal server error", Error = ex.Message });
+        //    }
+        //}
 
 
         [HttpDelete("{id}")]

@@ -62,21 +62,21 @@ namespace Skincare.Services.Implements
             }
         }
 
-        public async Task<Account> CreateAccountAsync(Account account)
+        public async Task<Account> CreateAccountAsync(AccountDto accountDto)
         {
             try
             {
-                _logger.LogInformation($"Creating account for email: {account.Email}");
+                _logger.LogInformation($"Creating account for email: {accountDto.Email}");
 
                 var newAccount = new Account
                 {
-                    Username = account.Username,
-                    Email = account.Email,
-                    PasswordHash = account.PasswordHash,
-                    Role = "User", // ✅ Role mặc định
-                    Address = null, // Để null cho người dùng tự cập nhật sau
-                    Avatar = null,
-                    PhoneNumber = null,
+                    Username = accountDto.Username,
+                    Email = accountDto.Email,
+                    PasswordHash = HashPassword(accountDto.Password), 
+                    Role = "User", 
+                    Address = accountDto.Address,
+                    Avatar = accountDto.Avatar,
+                    PhoneNumber = accountDto.PhoneNumber,
                     CreatedAt = DateTime.UtcNow
                 };
 
@@ -84,7 +84,7 @@ namespace Skincare.Services.Implements
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"An error occurred while creating account for email: {account.Email}");
+                _logger.LogError(ex, $"An error occurred while creating account for email: {accountDto.Email}");
                 throw;
             }
         }
@@ -98,11 +98,11 @@ namespace Skincare.Services.Implements
                 if (account == null)
                     throw new Exception($"User ID {userId} not found");
 
-                account.Username = profileDto.Username;
-                account.Email = profileDto.Email;
-                account.Address = profileDto.Address;
-                account.Avatar = profileDto.Avatar;
-                account.PhoneNumber = profileDto.PhoneNumber;
+                account.Username = profileDto.Username ?? account.Username;
+                account.Email = profileDto.Email ?? account.Email;
+                account.Address = profileDto.Address ?? account.Address;
+                account.Avatar = profileDto.Avatar ?? account.Avatar;
+                account.PhoneNumber = profileDto.PhoneNumber ?? account.PhoneNumber;
 
                 await _accountRepository.UpdateAccountAsync(account);
             }
@@ -113,30 +113,30 @@ namespace Skincare.Services.Implements
             }
         }
 
-        public async Task<bool> ChangePasswordAsync(int userId, ChangePasswordDto passwordDto)
-        {
-            try
-            {
-                var account = await _accountRepository.GetAccountByIdAsync(userId);
-                if (account == null)
-                    throw new Exception($"User ID {userId} not found");
+        //public async Task<bool> ChangePasswordAsync(int userId, ChangePasswordDto passwordDto)
+        //{
+        //    try
+        //    {
+        //        var account = await _accountRepository.GetAccountByIdAsync(userId);
+        //        if (account == null)
+        //            throw new Exception($"User ID {userId} not found");
 
-                // Kiểm tra mật khẩu hiện tại
-                if (!BCrypt.Net.BCrypt.Verify(passwordDto.CurrentPassword, account.PasswordHash))
-                    return false;
+        //        // Kiểm tra mật khẩu hiện tại
+        //        if (!BCrypt.Net.BCrypt.Verify(passwordDto.CurrentPassword, account.PasswordHash))
+        //            return false;
 
-                // Cập nhật mật khẩu mới
-                account.PasswordHash = BCrypt.Net.BCrypt.HashPassword(passwordDto.NewPassword);
-                await _accountRepository.UpdateAccountAsync(account);
+        //        // Cập nhật mật khẩu mới
+        //        account.PasswordHash = BCrypt.Net.BCrypt.HashPassword(passwordDto.NewPassword);
+        //        await _accountRepository.UpdateAccountAsync(account);
 
-                return true;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error changing password for User ID {userId}");
-                throw;
-            }
-        }
+        //        return true;
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, $"Error changing password for User ID {userId}");
+        //        throw;
+        //    }
+        //}
 
 
         public async Task DeleteAccountAsync(int id)

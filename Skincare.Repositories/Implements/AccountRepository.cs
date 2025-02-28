@@ -20,11 +20,6 @@ namespace Skincare.Repositories.Implements
             _logger = logger;
         }
 
-        public async Task<Account> GetByRefreshTokenAsync(string refreshToken)
-        {
-            return await _context.Accounts.FirstOrDefaultAsync(a => a.RefreshToken == refreshToken);
-        }
-
         public async Task<IEnumerable<Account>> GetAllAccountsAsync()
         {
             try
@@ -70,8 +65,6 @@ namespace Skincare.Repositories.Implements
                         Avatar = a.Avatar ?? string.Empty, // ✅ Fix lỗi NULL
                         Status = a.Status ?? "active", // ✅ Fix lỗi NULL
                         CreatedAt = a.CreatedAt ?? DateTime.UtcNow, // ✅ Fix NULL thành giá trị mặc định
-                        RefreshToken = a.RefreshToken ?? string.Empty,
-                        RefreshTokenExpiry = a.RefreshTokenExpiry ?? DateTime.UtcNow.AddDays(7) // ✅ Nếu NULL thì tự động set giá trị
                     })
                     .FirstOrDefaultAsync();
 
@@ -118,12 +111,6 @@ namespace Skincare.Repositories.Implements
                     _logger.LogWarning($"Account with ID {account.Id} not found.");
                     return;
                 }
-
-                // ✅ Chỉ cập nhật RefreshToken & RefreshTokenExpiry
-                existingAccount.RefreshToken = !string.IsNullOrEmpty(account.RefreshToken) ? account.RefreshToken : existingAccount.RefreshToken;
-                existingAccount.RefreshTokenExpiry = account.RefreshTokenExpiry ?? existingAccount.RefreshTokenExpiry;
-
-                _logger.LogInformation($"Updating account ID {account.Id}: RefreshToken = {existingAccount.RefreshToken}, Expiry = {existingAccount.RefreshTokenExpiry}");
 
                 await _context.SaveChangesAsync();
             }

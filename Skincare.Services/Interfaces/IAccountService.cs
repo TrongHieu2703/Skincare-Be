@@ -15,6 +15,6 @@ namespace Skincare.Services.Interfaces
         Task<UProfileDTO> GetUserProfile(int id);
 
         Task UpdateProfileAsync(int userId, UProfileDTO profileDto);
-        Task<bool> ChangePasswordAsync(int userId, ChangePasswordDto passwordDto);
+        //Task<bool> ChangePasswordAsync(int userId, ChangePasswordDto passwordDto);
     }
 }
