@@ -10,6 +10,7 @@ namespace Skincare.Repositories.Interfaces
         Task<IEnumerable<Order>> GetAllOrdersAsync();
         Task<Order> GetOrderByIdAsync(int id);
         Task<Order> CreateOrderAsync(Order order);
+        Task<Order> GetOrderByUser(int OrderId, int CustomerId);
         Task<Order> UpdateOrderAsync(Order existingOrder, UpdateOrderDto updateOrderDto);
         Task DeleteOrderAsync(int id);
 

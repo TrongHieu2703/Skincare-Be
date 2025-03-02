@@ -82,6 +82,20 @@ namespace Skincare.API.Controllers
                 return BadRequest(ModelState);
             try
             {
+                // Lấy userId từ token JWT
+                var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                _logger.LogInformation($"Creating order with user ID from token: {userIdStr}");
+                
+                if (string.IsNullOrEmpty(userIdStr) || !int.TryParse(userIdStr, out var userId))
+                {
+                    _logger.LogWarning("Invalid user token when creating order");
+                    return Unauthorized(new { Message = "Invalid user token" });
+                }
+
+                // Gán userId từ token vào createOrderDto
+                createOrderDto.CustomerId = userId;
+                _logger.LogInformation($"Setting CustomerId to {userId} from JWT token");
+
                 var createdOrder = await _orderService.CreateOrderAsync(createOrderDto);
                 return CreatedAtAction(nameof(GetOrderById), new { id = createdOrder.Id }, createdOrder);
             }
@@ -122,6 +136,29 @@ namespace Skincare.API.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Error deleting order with ID {id}");
+                return StatusCode(500, "Internal server error");
+            }
+        }
+
+        // Lấy chi tiết đơn hàng an toàn (không lộ thông tin nhạy cảm)
+        [HttpGet("detail/{id}")]
+        public async Task<IActionResult> GetOrderDetail(int id)
+        {
+            try
+            {
+                var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (string.IsNullOrEmpty(userIdStr) || !int.TryParse(userIdStr, out var userId))
+                    return Unauthorized(new { Message = "Invalid user token" });
+                    
+                var order = await _orderService.GetOrderByUser(id, userId);
+                if (order == null)
+                    return NotFound(new { Message = $"Order {id} not found for this user" });
+                    
+                return Ok(order);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error fetching detailed order with ID {id}");
                 return StatusCode(500, "Internal server error");
             }
         }
