@@ -14,7 +14,6 @@ namespace Skincare.Services.Implements
     {
         private readonly IOrderRepository _orderRepository;
         private readonly ILogger<OrderService> _logger;
-
         public OrderService(IOrderRepository orderRepository, ILogger<OrderService> logger)
         {
             _orderRepository = orderRepository;
@@ -40,44 +39,43 @@ namespace Skincare.Services.Implements
         }
 
         public async Task<OrderDto> CreateOrderAsync(CreateOrderDto orderDto)
-{
-    if (orderDto.CustomerId <= 0)
-        throw new ArgumentException("CustomerId must be greater than 0");
-
-    // Nếu VoucherId không hợp lệ, đặt về null
-    if (orderDto.VoucherId.HasValue && orderDto.VoucherId.Value <= 0)
-        orderDto.VoucherId = null;
-
-    decimal totalAmount = orderDto.TotalPrice - (orderDto.DiscountPrice ?? 0);
-
-    var order = new Order
-    {
-        CustomerId = orderDto.CustomerId,
-        VoucherId = orderDto.VoucherId,
-        TotalPrice = orderDto.TotalPrice,
-        DiscountPrice = orderDto.DiscountPrice,
-        TotalAmount = totalAmount,
-        IsPrepaid = orderDto.IsPrepaid,
-        Status = string.IsNullOrWhiteSpace(orderDto.Status) ? "Pending" : orderDto.Status,
-        UpdatedAt = DateTime.UtcNow,
-        OrderItems = orderDto.OrderItems.Select(item => new OrderItem
         {
-            ProductId = item.ProductId,
-            ItemQuantity = item.ItemQuantity
-        }).ToList(),
-        Transactions = orderDto.Transactions.Select(tx => new Transaction
-        {
-            PaymentMethod = tx.PaymentMethod,
-            Status = tx.Status,
-            Amount = tx.Amount,
-            CreatedDate = tx.CreatedDate ?? DateTime.UtcNow
-        }).ToList()
-    };
+            if (orderDto.CustomerId <= 0)
+                throw new ArgumentException("CustomerId must be greater than 0");
 
-    var createdOrder = await _orderRepository.CreateOrderAsync(order);
-    return MapToDto(createdOrder);
-}
+            // Nếu VoucherId không hợp lệ, đặt về null
+            if (orderDto.VoucherId.HasValue && orderDto.VoucherId.Value <= 0)
+                orderDto.VoucherId = null;
 
+            decimal totalAmount = orderDto.TotalPrice - (orderDto.DiscountPrice ?? 0);
+
+            var order = new Order
+            {
+                CustomerId = orderDto.CustomerId,
+                VoucherId = orderDto.VoucherId,
+                TotalPrice = orderDto.TotalPrice,
+                DiscountPrice = orderDto.DiscountPrice,
+                TotalAmount = totalAmount,
+                IsPrepaid = orderDto.IsPrepaid,
+                Status = string.IsNullOrWhiteSpace(orderDto.Status) ? "Pending" : orderDto.Status,
+                UpdatedAt = DateTime.UtcNow,
+                OrderItems = orderDto.OrderItems.Select(item => new OrderItem
+                {
+                    ProductId = item.ProductId,
+                    ItemQuantity = item.ItemQuantity
+                }).ToList(),
+                Transactions = orderDto.Transactions.Select(tx => new Transaction
+                {
+                    PaymentMethod = tx.PaymentMethod,
+                    Status = tx.Status,
+                    Amount = tx.Amount,
+                    CreatedDate = tx.CreatedDate ?? DateTime.UtcNow
+                }).ToList()
+            };
+
+            var createdOrder = await _orderRepository.CreateOrderAsync(order);
+            return MapToDto(createdOrder);
+        }
 
         public async Task<OrderDto> UpdateOrderAsync(int id, UpdateOrderDto orderDto)
         {
@@ -95,30 +93,61 @@ namespace Skincare.Services.Implements
 
         private OrderDto MapToDto(Order order)
         {
+            // Tạo thông tin thanh toán từ transaction gần nhất
+            var latestTransaction = order.Transactions?.OrderByDescending(t => t.CreatedDate).FirstOrDefault();
+            var paymentInfo = latestTransaction != null ? new PaymentInfoDto
+            {
+                PaymentMethod = latestTransaction.PaymentMethod,
+                Status = latestTransaction.Status,
+                Amount = latestTransaction.Amount,
+                CreatedDate = latestTransaction.CreatedDate
+            } : null;
+            
+            // Tạo thông tin khách hàng
+            var customerInfo = order.Customer != null ? new CustomerInfoDto
+            {
+                Username = order.Customer.Username,
+                Email = order.Customer.Email,
+                PhoneNumber = order.Customer.PhoneNumber,
+                Address = order.Customer.Address
+            } : null;
+            
+            // Tạo thông tin voucher
+            var voucherInfo = order.Voucher != null ? new VoucherInfoDto
+            {
+                Code = order.Voucher.Code,
+                Name = order.Voucher.Name,
+                Value = order.Voucher.Value,
+                IsPercent = order.Voucher.IsPercent
+            } : null;
+            
             return new OrderDto
             {
                 Id = order.Id,
-                CustomerId = order.CustomerId,
-                VoucherId = order.VoucherId,
+                Status = order.Status,
+                UpdatedAt = order.UpdatedAt,
                 TotalPrice = order.TotalPrice,
                 DiscountPrice = order.DiscountPrice,
                 TotalAmount = order.TotalAmount,
                 IsPrepaid = order.IsPrepaid,
-                Status = order.Status,
-                UpdatedAt = order.UpdatedAt,
-                OrderItems = order.OrderItems.Select(oi => new OrderItemDto
+                Voucher = voucherInfo,
+                CustomerInfo = customerInfo,
+                PaymentInfo = paymentInfo,
+                OrderItems = order.OrderItems.Select(oi => new OrderItemDetailDto
                 {
                     ProductId = oi.ProductId,
+                    ProductName = oi.Product?.Name ?? $"Sản phẩm #{oi.ProductId}",
+                    ProductImage = oi.Product?.Image,
+                    ProductPrice = oi.Product?.Price ?? 0,
                     ItemQuantity = oi.ItemQuantity
-                }).ToList(),
-                Transactions = order.Transactions.Select(tx => new TransactionDto
-                {
-                    PaymentMethod = tx.PaymentMethod,
-                    Amount = tx.Amount,
-                    Status = tx.Status,
-                    CreatedDate = tx.CreatedDate
                 }).ToList()
             };
+        }
+
+        public async Task<OrderDto> GetOrderByUser(int OrderId, int CustomerId)
+        {
+            var order = await _orderRepository.GetOrderByUser(OrderId, CustomerId);
+            return order != null ? MapToDto(order) : null;
         }
     }
 }

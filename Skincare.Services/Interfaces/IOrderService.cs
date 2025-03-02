@@ -8,6 +8,9 @@ namespace Skincare.Services.Interfaces
     {
         Task<IEnumerable<OrderDto>> GetAllOrdersAsync();
         Task<OrderDto> GetOrderByIdAsync(int id);
+
+        Task<OrderDto> GetOrderByUser(int OrderId, int CustomerId);
+
         Task<OrderDto> CreateOrderAsync(CreateOrderDto orderDto);
         Task<OrderDto> UpdateOrderAsync(int id, UpdateOrderDto orderDto);
         Task DeleteOrderAsync(int id);

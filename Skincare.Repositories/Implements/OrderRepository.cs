@@ -43,7 +43,10 @@ namespace Skincare.Repositories.Implements
             try
             {
                 return await _context.Orders
+                    .Include(o => o.Customer)
+                    .Include(o => o.Voucher)
                     .Include(o => o.OrderItems)
+                        .ThenInclude(oi => oi.Product)
                     .Include(o => o.Transactions)
                     .FirstOrDefaultAsync(o => o.Id == id);
             }
@@ -165,5 +168,30 @@ namespace Skincare.Repositories.Implements
     }
 }
 
+        public async Task<Order> GetOrderByUser(int OrderId, int CustomerId)
+        {
+            try
+            {
+                var order = await _context.Orders
+                    .Include(o => o.Customer)
+                    .Include(o => o.Voucher)
+                    .Include(o => o.Transactions)
+                    .Include(o => o.OrderItems)
+                        .ThenInclude(oi => oi.Product)
+                    .FirstOrDefaultAsync(o => o.Id == OrderId && o.CustomerId == CustomerId);
+                
+                if (order == null)
+                {
+                    _logger.LogWarning($"Order with ID {OrderId} and CustomerId {CustomerId} not found");
+                    throw new Exception("Order not found");
+                }
+                return order;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error fetching order with ID {OrderId} and CustomerId {CustomerId}");
+                throw;
+            }
+        }
     }
 }
