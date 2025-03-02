@@ -17,6 +17,7 @@ namespace Skincare.API.Configurations
             services.AddScoped<IReviewService, ReviewService>();
             services.AddScoped<IAuthenticationService, AuthenticationService>();
             services.AddScoped<IInventoryService, InventoryService>();
+            services.AddScoped<ICartService, CartService>();
 
             // Register repositories
             services.AddScoped<IAccountRepository, AccountRepository>();
@@ -25,6 +26,7 @@ namespace Skincare.API.Configurations
             services.AddScoped<IReviewRepository, ReviewRepository>();
             services.AddScoped<IAuthenticationRepository, AuthenticationRepository>();
             services.AddScoped<IInventoryRepository, InventoryRepository>();
+            services.AddScoped<ICartRepository, CartRepository>();
 
             // === Đăng ký IEmailService (bạn thêm dòng này!) ===
             services.AddScoped<IEmailService, EmailService>();

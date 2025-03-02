@@ -25,8 +25,6 @@ namespace Skincare.Repositories.Implements
                 .Where(t => t.OrderId == orderId)
                 .Select(t => new TransactionDto
                 {
-                    TransactionId = t.TransactionId,
-                    OrderId = t.OrderId,
                     PaymentMethod = t.PaymentMethod,
                     Amount = t.Amount,
                     Status = t.Status,
@@ -51,8 +49,6 @@ namespace Skincare.Repositories.Implements
 
             return new TransactionDto
             {
-                TransactionId = transaction.TransactionId,
-                OrderId = transaction.OrderId,
                 PaymentMethod = transaction.PaymentMethod,
                 Amount = transaction.Amount,
                 Status = transaction.Status,
@@ -73,8 +69,6 @@ namespace Skincare.Repositories.Implements
 
             return new TransactionDto
             {
-                TransactionId = transaction.TransactionId,
-                OrderId = transaction.OrderId,
                 PaymentMethod = transaction.PaymentMethod,
                 Amount = transaction.Amount,
                 Status = transaction.Status,

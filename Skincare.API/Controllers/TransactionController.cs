@@ -30,7 +30,7 @@ namespace Skincare.API.Controllers
               if (!ModelState.IsValid)
                   return BadRequest(ModelState);
               var transaction = await _transactionService.CreateTransactionAsync(createTransactionDto);
-              return CreatedAtAction(nameof(GetTransactionsByOrderId), new { orderId = transaction.OrderId }, transaction);
+              return Created("", transaction);
          }
 
          [HttpPut("{id}")]

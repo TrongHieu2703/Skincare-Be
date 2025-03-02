@@ -54,31 +54,32 @@ namespace Skincare.Repositories.Implements
             }
         }
 
-        public async Task<Order> CreateOrderAsync(Order order)
+       public async Task<Order> CreateOrderAsync(Order order)
+{
+    try
+    {
+        // Kiểm tra voucher tồn tại nếu có
+        if (order.VoucherId.HasValue)
         {
-            try
+            var voucherExists = await _context.Vouchers.AnyAsync(v => v.Id == order.VoucherId.Value);
+            if (!voucherExists)
             {
-                // Kiểm tra voucher tồn tại nếu có
-                if (order.VoucherId.HasValue)
-                {
-                    var voucherExists = await _context.Vouchers.AnyAsync(v => v.Id == order.VoucherId.Value);
-                    if (!voucherExists)
-                    {
-                        _logger.LogWarning($"Voucher with ID {order.VoucherId.Value} does not exist. Skipping voucher.");
-                        order.VoucherId = null;
-                    }
-                }
-
-                _context.Orders.Add(order);
-                await _context.SaveChangesAsync();
-                return order;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error creating order");
-                throw;
+                _logger.LogWarning($"Voucher with ID {order.VoucherId.Value} does not exist. Skipping voucher.");
+                order.VoucherId = null;
             }
         }
+
+        _context.Orders.Add(order);
+        await _context.SaveChangesAsync();
+        return order;
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "Error creating order");
+        throw;
+    }
+}
+
 
         public async Task<Order> UpdateOrderAsync(Order existingOrder, UpdateOrderDto updateOrderDto)
         {

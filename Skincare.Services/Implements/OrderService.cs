@@ -40,35 +40,44 @@ namespace Skincare.Services.Implements
         }
 
         public async Task<OrderDto> CreateOrderAsync(CreateOrderDto orderDto)
-        {
-            // Chuyển đổi DTO sang Entity
-            var order = new Order
-            {
-                CustomerId = orderDto.CustomerId,
-                VoucherId = orderDto.VoucherId,
-                TotalPrice = orderDto.TotalPrice,
-                DiscountPrice = orderDto.DiscountPrice,
-                TotalAmount = orderDto.TotalPrice - (orderDto.DiscountPrice ?? 0),
-                IsPrepaid = orderDto.IsPrepaid,
-                Status = "Pending",  // Mặc định Pending
-                UpdatedAt = DateTime.UtcNow,
-                OrderItems = orderDto.OrderItems.Select(item => new OrderItem
-                {
-                    ProductId = item.ProductId,
-                    ItemQuantity = item.ItemQuantity
-                }).ToList(),
-                Transactions = orderDto.Transactions.Select(tx => new Transaction
-                {
-                    PaymentMethod = tx.PaymentMethod,
-                    Status = tx.Status,
-                    Amount = tx.Amount,
-                    CreatedDate = tx.CreatedDate ?? DateTime.UtcNow
-                }).ToList()
-            };
+{
+    if (orderDto.CustomerId <= 0)
+        throw new ArgumentException("CustomerId must be greater than 0");
 
-            var createdOrder = await _orderRepository.CreateOrderAsync(order);
-            return MapToDto(createdOrder);
-        }
+    // Nếu VoucherId không hợp lệ, đặt về null
+    if (orderDto.VoucherId.HasValue && orderDto.VoucherId.Value <= 0)
+        orderDto.VoucherId = null;
+
+    decimal totalAmount = orderDto.TotalPrice - (orderDto.DiscountPrice ?? 0);
+
+    var order = new Order
+    {
+        CustomerId = orderDto.CustomerId,
+        VoucherId = orderDto.VoucherId,
+        TotalPrice = orderDto.TotalPrice,
+        DiscountPrice = orderDto.DiscountPrice,
+        TotalAmount = totalAmount,
+        IsPrepaid = orderDto.IsPrepaid,
+        Status = string.IsNullOrWhiteSpace(orderDto.Status) ? "Pending" : orderDto.Status,
+        UpdatedAt = DateTime.UtcNow,
+        OrderItems = orderDto.OrderItems.Select(item => new OrderItem
+        {
+            ProductId = item.ProductId,
+            ItemQuantity = item.ItemQuantity
+        }).ToList(),
+        Transactions = orderDto.Transactions.Select(tx => new Transaction
+        {
+            PaymentMethod = tx.PaymentMethod,
+            Status = tx.Status,
+            Amount = tx.Amount,
+            CreatedDate = tx.CreatedDate ?? DateTime.UtcNow
+        }).ToList()
+    };
+
+    var createdOrder = await _orderRepository.CreateOrderAsync(order);
+    return MapToDto(createdOrder);
+}
+
 
         public async Task<OrderDto> UpdateOrderAsync(int id, UpdateOrderDto orderDto)
         {
@@ -104,8 +113,6 @@ namespace Skincare.Services.Implements
                 }).ToList(),
                 Transactions = order.Transactions.Select(tx => new TransactionDto
                 {
-                    TransactionId = tx.TransactionId,
-                    OrderId = tx.OrderId,
                     PaymentMethod = tx.PaymentMethod,
                     Amount = tx.Amount,
                     Status = tx.Status,
