@@ -5,13 +5,14 @@ using System.Collections.Generic;
 
 namespace Skincare.BusinessObjects.Entities;
 
-public class Cart
+public partial class CartItem
 {
+    public int CartItemId { get; set; }
     public int CartId { get; set; }
-    public int AccountId { get; set; }
-    public DateTime AddedDate { get; set; }
+    public int ProductId { get; set; }
+    public int Quantity { get; set; }
     
     // Navigation properties
-    public virtual Account Account { get; set; }
-    public virtual ICollection<CartItem> CartItems { get; set; } = new List<CartItem>();
+    public virtual Cart Cart { get; set; }
+    public virtual Product Product { get; set; }
 }
