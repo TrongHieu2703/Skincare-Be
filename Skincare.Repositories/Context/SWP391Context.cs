@@ -29,6 +29,8 @@ public partial class SWP391Context : DbContext
 
     public virtual DbSet<Cart> Carts { get; set; }
 
+    public virtual DbSet<CartItem> CartItems { get; set; }
+
     public virtual DbSet<CustomerTest> CustomerTests { get; set; }
 
     public virtual DbSet<Faq> Faqs { get; set; }
@@ -59,7 +61,6 @@ public partial class SWP391Context : DbContext
 
     public virtual DbSet<Voucher> Vouchers { get; set; }
 
-
     public static string GetConnectionString(string connectionStringName)
     {
         var config = new ConfigurationBuilder()
@@ -72,9 +73,10 @@ public partial class SWP391Context : DbContext
     }
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         => optionsBuilder.UseSqlServer(GetConnectionString("DefaultConnection"));
-//    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-//#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-//        => optionsBuilder.UseSqlServer("Data Source=(local);Initial Catalog=SWP391;Persist Security Info=True;User ID=sa;Password=123456;Encrypt=True");
+
+    //    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    //#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
+    //        => optionsBuilder.UseSqlServer("Data Source=(local);Initial Catalog=SWP391;Persist Security Info=True;User ID=sa;Password=123456;Encrypt=True");
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -202,26 +204,32 @@ public partial class SWP391Context : DbContext
 
         modelBuilder.Entity<Cart>(entity =>
         {
-            entity.HasKey(e => e.CartId).HasName("PK__Cart__51BCD797D46A884E");
+            entity.HasKey(e => e.CartId).HasName("PK__Cart__51BCD7B7C7477BB1");
 
             entity.ToTable("Cart");
 
-            entity.HasIndex(e => new { e.UserId, e.ProductId }, "IDX_Cart_User_Product");
+            entity.HasIndex(e => e.AccountId, "UQ__Cart__349DA5A73AE5ED1D").IsUnique();
 
-            entity.Property(e => e.CartId).HasColumnName("CartID");
-            entity.Property(e => e.AddedDate)
-                .HasDefaultValueSql("(getdate())")
-                .HasColumnType("datetime");
-            entity.Property(e => e.ProductId).HasColumnName("ProductID");
-            entity.Property(e => e.UserId).HasColumnName("UserID");
+            entity.Property(e => e.AddedDate).HasColumnType("datetime");
 
-            entity.HasOne(d => d.Product).WithMany(p => p.Carts)
+            entity.HasOne(d => d.Account).WithOne(p => p.Cart)
+                .HasForeignKey<Cart>(d => d.AccountId)
+                .HasConstraintName("FK__Cart__AccountId__681373AD");
+        });
+
+        modelBuilder.Entity<CartItem>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__CartItem__3214EC072EDFF712");
+
+            entity.ToTable("CartItem");
+
+            entity.HasOne(d => d.Cart).WithMany(p => p.CartItems)
+                .HasForeignKey(d => d.CartId)
+                .HasConstraintName("FK__CartItem__CartId__6AEFE058");
+
+            entity.HasOne(d => d.Product).WithMany(p => p.CartItems)
                 .HasForeignKey(d => d.ProductId)
-                .HasConstraintName("FK__Cart__ProductID__1AD3FDA4");
-
-            entity.HasOne(d => d.User).WithMany(p => p.Carts)
-                .HasForeignKey(d => d.UserId)
-                .HasConstraintName("FK__Cart__UserID__19DFD96B");
+                .HasConstraintName("FK__CartItem__Produc__6BE40491");
         });
 
         modelBuilder.Entity<CustomerTest>(entity =>
@@ -365,7 +373,8 @@ public partial class SWP391Context : DbContext
 
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.Description)
-                .HasColumnType("text")
+                .HasMaxLength(255)
+                .UseCollation("Vietnamese_CI_AS")
                 .HasColumnName("description");
             entity.Property(e => e.Image)
                 .HasMaxLength(255)

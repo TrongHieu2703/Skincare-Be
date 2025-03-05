@@ -20,7 +20,8 @@ namespace Skincare.Repositories.Implements
         public async Task<IEnumerable<Cart>> GetAllCartsAsync(int pageNumber, int pageSize)
         {
             return await _context.Carts
-                .Include(c => c.Product)
+                .Include(c => c.CartItems)
+                .ThenInclude(ci => ci.Product)
                 .Skip((pageNumber - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
@@ -29,24 +30,24 @@ namespace Skincare.Repositories.Implements
         public async Task<Cart> GetCartByIdAsync(int id)
         {
             return await _context.Carts
-                .Include(c => c.Product)
+                .Include(c => c.CartItems)
+                .ThenInclude(ci => ci.Product)
                 .FirstOrDefaultAsync(c => c.CartId == id);
         }
 
-        public async Task<IEnumerable<Cart>> GetCartsByUserIdAsync(int userId)
+        public async Task<Cart> GetCartsByUserIdAsync(int userId)
         {
             return await _context.Carts
-                .Include(c => c.Product)
-                .Where(c => c.UserId == userId)
-                .ToListAsync();
+                .Include(c => c.CartItems)
+                    .ThenInclude(ci => ci.Product)
+                .FirstOrDefaultAsync(c => c.AccountId == userId && c.CartItems.Any());
         }
 
-        // Phương thức mới: Lấy Cart của một user theo ProductId
-        public async Task<Cart> GetCartByUserAndProductAsync(int userId, int productId)
+        public async Task<CartItem> GetCartItemAsync(int cartId, int productId)
         {
-            return await _context.Carts
-                .Include(c => c.Product)
-                .FirstOrDefaultAsync(c => c.UserId == userId && c.ProductId == productId);
+            return await _context.CartItems
+                .Include(ci => ci.Product)
+                .FirstOrDefaultAsync(ci => ci.CartId == cartId && ci.ProductId == productId);
         }
 
         public async Task<Cart> AddCartAsync(Cart cart)
@@ -56,19 +57,41 @@ namespace Skincare.Repositories.Implements
             return cart;
         }
 
-        public async Task<Cart> UpdateCartAsync(Cart cart)
+        public async Task<CartItem> AddCartItemAsync(CartItem cartItem)
         {
-            _context.Carts.Update(cart);
+            _context.CartItems.Add(cartItem);
             await _context.SaveChangesAsync();
-            return cart;
+            return cartItem;
         }
 
-        public async Task<bool> DeleteCartAsync(int id)
+        public async Task<CartItem> UpdateCartItemAsync(CartItem cartItem)
         {
-            var cart = await _context.Carts.FindAsync(id);
-            if (cart == null)
+            _context.Entry(cartItem).State = EntityState.Modified;
+            await _context.SaveChangesAsync();
+            return cartItem;
+        }
+
+        public async Task<bool> DeleteCartItemAsync(int cartId, int productId)
+        {
+            var cartItem = await GetCartItemAsync(cartId, productId);
+            if (cartItem == null)
                 return false;
-            _context.Carts.Remove(cart);
+
+            _context.CartItems.Remove(cartItem);
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> ClearCartAsync(int cartId)
+        {
+            var cartItems = await _context.CartItems
+                .Where(ci => ci.CartId == cartId)
+                .ToListAsync();
+
+            if (!cartItems.Any())
+                return false;
+
+            _context.CartItems.RemoveRange(cartItems);
             await _context.SaveChangesAsync();
             return true;
         }
