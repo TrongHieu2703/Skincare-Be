@@ -7,6 +7,8 @@ using Skincare.API.Middleware;
 using System.Text.Json.Serialization;
 using Skincare.API.Configurations;
 using Microsoft.OpenApi.Models;
+using Skincare.Services.Interfaces;
+using Skincare.Services.Implements;
 
 namespace Skincare.API
 {
@@ -125,6 +127,21 @@ namespace Skincare.API
             });
 
             services.AddAuthorization();
+
+            // Tạo thư mục wwwroot/uploads nếu chưa tồn tại
+            var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
+            if (!Directory.Exists(uploadsPath))
+            {
+                Directory.CreateDirectory(uploadsPath);
+            }
+
+            // Đăng ký FileService với đường dẫn đúng
+            services.AddScoped<IFileService>(provider =>
+            {
+                var logger = provider.GetRequiredService<ILogger<FileService>>();
+                var rootPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+                return new FileService(rootPath, logger);
+            });
         }
 
         private static void ConfigureMiddleware(WebApplication app)
@@ -161,6 +178,9 @@ namespace Skincare.API
                 }
                 await next();
             });
+
+            // Cấu hình để phục vụ files tĩnh từ wwwroot
+            app.UseStaticFiles();
 
             // Định tuyến API
             app.MapControllers();

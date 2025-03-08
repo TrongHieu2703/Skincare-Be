@@ -29,15 +29,16 @@ namespace Skincare.API.Controllers
             try
             {
                 var response = await _authenticationService.RegisterAsync(request);
-                if (response == null)
-                    return BadRequest(new { Message = "Email already exists." });
-
                 return Ok(response);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error during registration");
-                return StatusCode(500, new { Message = "Internal server error", Error = ex.Message });
+                _logger.LogError(ex, "Error during registration: {Message}", ex.Message);
+                return StatusCode(500, new { 
+                    Message = "Đăng ký thất bại", 
+                    Error = ex.Message,
+                    Details = ex.InnerException?.Message 
+                });
             }
         }
 

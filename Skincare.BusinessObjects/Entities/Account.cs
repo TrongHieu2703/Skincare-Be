@@ -2,6 +2,8 @@
 #nullable disable
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
+
 
 namespace Skincare.BusinessObjects.Entities;
 
@@ -15,6 +17,7 @@ public partial class Account
 
     public string Address { get; set; }
 
+    [Column(TypeName = "nvarchar(MAX)")]
     public string Avatar { get; set; }
 
     public string PhoneNumber { get; set; }

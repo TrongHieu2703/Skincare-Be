@@ -13,11 +13,16 @@ namespace Skincare.Services.Implements
     public class AccountService : IAccountService
     {
         private readonly IAccountRepository _accountRepository;
+        private readonly IFileService _fileService;
         private readonly ILogger<AccountService> _logger;
 
-        public AccountService(IAccountRepository accountRepository, ILogger<AccountService> logger)
+        public AccountService(
+            IAccountRepository accountRepository,
+            IFileService fileService,
+            ILogger<AccountService> logger)
         {
             _accountRepository = accountRepository;
+            _fileService = fileService;
             _logger = logger;
         }
 
@@ -160,10 +165,32 @@ namespace Skincare.Services.Implements
                 if (account == null)
                     throw new Exception($"User ID {userId} not found");
 
+                // Handle avatar update
+                if (!string.IsNullOrEmpty(profileDto.Avatar) && profileDto.Avatar.Contains("base64"))
+                {
+                    try
+                    {
+                        // Delete old avatar if exists
+                        if (!string.IsNullOrEmpty(account.Avatar))
+                        {
+                            _fileService.DeleteImage(account.Avatar);
+                        }
+
+                        // Save new avatar and get path
+                        string avatarPath = await _fileService.SaveImageAsync(profileDto.Avatar);
+                        account.Avatar = avatarPath;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error processing avatar");
+                        throw new Exception("Không thể xử lý ảnh đại diện. Vui lòng thử lại.");
+                    }
+                }
+
+                // Update other fields
                 account.Username = profileDto.Username ?? account.Username;
                 account.Email = profileDto.Email ?? account.Email;
                 account.Address = profileDto.Address ?? account.Address;
-                account.Avatar = profileDto.Avatar ?? account.Avatar;
                 account.PhoneNumber = profileDto.PhoneNumber ?? account.PhoneNumber;
 
                 await _accountRepository.UpdateAccountAsync(account);
