@@ -56,81 +56,103 @@ namespace Skincare.API.Controllers
         }
 
         [HttpGet("user")]
-        public async Task<IActionResult> GetCartsByUserId()
+        public async Task<IActionResult> GetUserCart()
         {
             try
             {
                 var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 if (!int.TryParse(userIdStr, out var userId))
-                    return Unauthorized("Invalid user token");
+                    return Unauthorized(new { message = "Token không hợp lệ" });
 
-                var carts = await _cartService.GetCartsByUserIdAsync(userId);
-                return Ok(carts);
+                var result = await _cartService.GetCartsByUserIdAsync(userId);
+                return Ok(result);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error fetching carts for user");
-                return StatusCode(500, "Internal server error");
+                _logger.LogError(ex, "Lỗi khi lấy giỏ hàng của người dùng");
+                return StatusCode(500, new { message = "Đã xảy ra lỗi khi xử lý yêu cầu" });
             }
         }
 
-        [HttpPost]
-        public async Task<IActionResult> AddCart([FromBody] AddToCartDTO dto)
+        [HttpPost("add")]
+        public async Task<IActionResult> AddToCart([FromBody] AddToCartDTO dto)
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (!int.TryParse(userIdStr, out var userId))
-                return Unauthorized("Invalid user token");
-
             try
             {
-                var createdCart = await _cartService.AddCartAsync(dto, userId);
-                return CreatedAtAction(nameof(GetCartById), new { id = createdCart.CartId }, createdCart);
+                var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!int.TryParse(userIdStr, out var userId))
+                    return Unauthorized(new { message = "Token không hợp lệ" });
+
+                var result = await _cartService.AddToCartAsync(userId, dto);
+                return Ok(result);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error adding cart");
-                return StatusCode(500, "Internal server error");
+                _logger.LogError(ex, "Lỗi khi thêm sản phẩm vào giỏ hàng");
+                return StatusCode(500, new { message = "Đã xảy ra lỗi khi xử lý yêu cầu" });
             }
         }
 
-        [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateCart(int id, [FromBody] UpdateCartDTO dto)
+        [HttpPut("update")]
+        public async Task<IActionResult> UpdateCartItem([FromBody] UpdateCartItemDTO dto)
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            if (id != dto.CartId)
-                return BadRequest("Cart ID mismatch");
-
             try
             {
-                var updatedCart = await _cartService.UpdateCartAsync(dto);
-                if (updatedCart == null)
-                    return NotFound("Cart not found");
-                return Ok(updatedCart);
+                var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!int.TryParse(userIdStr, out var userId))
+                    return Unauthorized(new { message = "Token không hợp lệ" });
+
+                var result = await _cartService.UpdateCartItemAsync(userId, dto);
+                return Ok(result);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error updating cart with ID {id}");
-                return StatusCode(500, "Internal server error");
+                _logger.LogError(ex, "Lỗi khi cập nhật giỏ hàng");
+                return StatusCode(500, new { message = "Đã xảy ra lỗi khi xử lý yêu cầu" });
             }
         }
 
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteCart(int id)
+        [HttpDelete("remove/{productId}")]
+        public async Task<IActionResult> RemoveFromCart(int productId)
         {
             try
             {
-                await _cartService.DeleteCartAsync(id);
-                return NoContent();
+                var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!int.TryParse(userIdStr, out var userId))
+                    return Unauthorized(new { message = "Token không hợp lệ" });
+
+                var result = await _cartService.RemoveFromCartAsync(userId, productId);
+                return Ok(result);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error deleting cart with ID {id}");
-                return StatusCode(500, "Internal server error");
+                _logger.LogError(ex, "Lỗi khi xóa sản phẩm khỏi giỏ hàng");
+                return StatusCode(500, new { message = "Đã xảy ra lỗi khi xử lý yêu cầu" });
+            }
+        }
+
+        [HttpDelete("clear")]
+        public async Task<IActionResult> ClearCart()
+        {
+            try
+            {
+                var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!int.TryParse(userIdStr, out var userId))
+                    return Unauthorized(new { message = "Token không hợp lệ" });
+
+                var result = await _cartService.ClearCartAsync(userId);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi xóa giỏ hàng");
+                return StatusCode(500, new { message = "Đã xảy ra lỗi khi xử lý yêu cầu" });
             }
         }
     }

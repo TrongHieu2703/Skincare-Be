@@ -35,6 +35,10 @@
          "ObjectType": 0
       },
       {
+         "Name": "[dbo].[CartItem]",
+         "ObjectType": 0
+      },
+      {
          "Name": "[dbo].[CustomerTest]",
          "ObjectType": 0
       },
