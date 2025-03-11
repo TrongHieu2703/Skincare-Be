@@ -1,0 +1,43 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.12.35527.113
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Skincare.API", "Skincare.API\Skincare.API.csproj", "{0D66FECA-61FB-45CE-9511-FD829D259B06}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Skincare.BusinessObjects", "Skincare.BusinessObjects\Skincare.BusinessObjects.csproj", "{280DADAF-C5E3-4054-AB42-BACFA1366BC9}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Skincare.Repositories", "Skincare.Repositories\Skincare.Repositories.csproj", "{5366C5EC-979A-40BF-BE72-534BA995157A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Skincare.Services", "Skincare.Services\Skincare.Services.csproj", "{D92E2840-B5AA-4177-AD0B-C18106318C8F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0D66FECA-61FB-45CE-9511-FD829D259B06}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0D66FECA-61FB-45CE-9511-FD829D259B06}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0D66FECA-61FB-45CE-9511-FD829D259B06}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0D66FECA-61FB-45CE-9511-FD829D259B06}.Release|Any CPU.Build.0 = Release|Any CPU
+		{280DADAF-C5E3-4054-AB42-BACFA1366BC9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{280DADAF-C5E3-4054-AB42-BACFA1366BC9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{280DADAF-C5E3-4054-AB42-BACFA1366BC9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{280DADAF-C5E3-4054-AB42-BACFA1366BC9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5366C5EC-979A-40BF-BE72-534BA995157A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5366C5EC-979A-40BF-BE72-534BA995157A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5366C5EC-979A-40BF-BE72-534BA995157A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5366C5EC-979A-40BF-BE72-534BA995157A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D92E2840-B5AA-4177-AD0B-C18106318C8F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D92E2840-B5AA-4177-AD0B-C18106318C8F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D92E2840-B5AA-4177-AD0B-C18106318C8F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D92E2840-B5AA-4177-AD0B-C18106318C8F}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {D173F393-F418-40F6-8BB7-C7D5420F0E8A}
+	EndGlobalSection
+EndGlobal
