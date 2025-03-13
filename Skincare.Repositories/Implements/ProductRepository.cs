@@ -112,14 +112,45 @@ namespace Skincare.Repositories.Implements
             return existing;
         }
 
-        public async Task DeleteProductAsync(int id)
+public async Task DeleteProductAsync(int id)
+{
+    try
+    {
+        // Tìm sản phẩm theo id
+        var product = await _context.Products.FindAsync(id);
+        if (product != null)
         {
-            var product = await _context.Products.FindAsync(id);
-            if (product != null)
+            // 1. Xoá các bản ghi ProductSkinType liên quan đến sản phẩm này
+            var relatedSkinTypes = _context.ProductSkinTypes.Where(pst => pst.ProductId == id);
+            if (relatedSkinTypes.Any())
             {
-                _context.Products.Remove(product);
-                await _context.SaveChangesAsync();
+                _context.ProductSkinTypes.RemoveRange(relatedSkinTypes);
+                // Ghi log nếu cần
             }
+
+            // 2. Xoá các bản ghi Inventory liên quan đến sản phẩm này
+            var relatedInventories = _context.Inventories.Where(inv => inv.ProductId == id);
+            if (relatedInventories.Any())
+            {
+                _context.Inventories.RemoveRange(relatedInventories);
+                // Ghi log nếu cần
+            }
+            
+            // Nếu còn các bảng khác phụ thuộc đến Product, cần xử lý tương tự.
+
+            // 3. Xoá sản phẩm
+            _context.Products.Remove(product);
+            await _context.SaveChangesAsync();
         }
+    }
+    catch (Exception ex)
+    {
+        // Log lỗi và ném lại exception
+        throw new Exception($"Error deleting product with ID {id}: {ex.Message}", ex);
+    }
+}
+
+
+
     }
 }
