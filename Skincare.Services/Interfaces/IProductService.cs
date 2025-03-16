@@ -1,6 +1,7 @@
 ﻿using Skincare.BusinessObjects.DTOs;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 
 namespace Skincare.Services.Interfaces
 {
@@ -11,6 +12,11 @@ namespace Skincare.Services.Interfaces
         Task<IEnumerable<ProductDto>> GetByTypeAsync(int productTypeId);
         Task<IEnumerable<ProductDto>> SearchProductsAsync(string keyword);
         Task<IEnumerable<ProductDto>> FilterProductsAsync(string category, bool? inStock, decimal? minPrice, decimal? maxPrice);
+        
+        // Thêm phương thức mới hỗ trợ upload ảnh
+        Task<ProductDto> CreateProductWithImageAsync(CreateProductDto createProductDto, IFormFile image);
+        Task<ProductDto> UpdateProductWithImageAsync(int id, UpdateProductDto updateProductDto, IFormFile image);
+        
         Task<ProductDto> CreateProductAsync(CreateProductDto createProductDto);
         Task<ProductDto> UpdateProductAsync(int id, UpdateProductDto updateProductDto);
         Task DeleteProductAsync(int id);

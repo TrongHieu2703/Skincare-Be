@@ -8,6 +8,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
+using System.Threading;
 
 namespace Skincare.Services.Implements
 {
@@ -15,11 +17,19 @@ namespace Skincare.Services.Implements
     {
         private readonly IProductRepository _productRepository;
         private readonly ILogger<ProductService> _logger;
+        private readonly GoogleDriveService _googleDriveService;
+        // Thêm biến để kiểm soát số lượng request
+        private static readonly Dictionary<string, DateTime> _lastUploadTime = new Dictionary<string, DateTime>();
+        private static readonly SemaphoreSlim _uploadSemaphore = new SemaphoreSlim(5, 5); // Giới hạn 5 upload đồng thời
 
-        public ProductService(IProductRepository productRepository, ILogger<ProductService> logger)
+        public ProductService(
+            IProductRepository productRepository, 
+            ILogger<ProductService> logger,
+            GoogleDriveService googleDriveService)
         {
             _productRepository = productRepository;
             _logger = logger;
+            _googleDriveService = googleDriveService;
         }
 
         public async Task<IEnumerable<ProductDto>> GetAllProductsAsync(int pageNumber, int pageSize)
@@ -191,6 +201,197 @@ namespace Skincare.Services.Implements
                 _logger.LogError(ex, "Error in CompareProductsAsync");
                 throw;
             }
+        }
+
+        public async Task<ProductDto> CreateProductWithImageAsync(CreateProductDto createProductDto, IFormFile image)
+        {
+            try
+            {
+                // Validate image
+                if (image == null || image.Length == 0)
+                {
+                    throw new ArgumentException("Không có file ảnh được tải lên");
+                }
+
+                // Kiểm tra rate limit
+                await CheckRateLimit("create");
+
+                // Allowed image types
+                var allowedTypes = new[] { "image/jpeg", "image/jpg", "image/png", "image/gif" };
+                if (!allowedTypes.Contains(image.ContentType.ToLower()))
+                {
+                    throw new ArgumentException("Loại file không hợp lệ. Chỉ chấp nhận JPG, PNG và GIF.");
+                }
+
+                // Kiểm tra kích thước tối đa (8MB)
+                if (image.Length > 8 * 1024 * 1024)
+                {
+                    throw new ArgumentException("Kích thước file quá lớn. Tối đa 8MB.");
+                }
+
+                // Sử dụng semaphore để giới hạn số lượng upload đồng thời
+                await _uploadSemaphore.WaitAsync();
+                try
+                {
+                    // Upload to Google Drive
+                    var (fileId, _, _, fileUrl) = await _googleDriveService.UploadFile(image);
+                    
+                    // Create product with image URL
+                    var newProduct = new Product
+                    {
+                        Name = createProductDto.Name,
+                        Description = createProductDto.Description,
+                        Price = createProductDto.Price,
+                        Image = fileUrl, // Set image URL from Google Drive
+                        IsAvailable = createProductDto.IsAvailable,
+                        ProductTypeId = createProductDto.ProductTypeId,
+                        ProductBrandId = createProductDto.ProductBrandId
+                    };
+
+                    var created = await _productRepository.CreateProductAsync(newProduct);
+                    return MapToDto(created);
+                }
+                finally
+                {
+                    _uploadSemaphore.Release();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in CreateProductWithImageAsync");
+                throw;
+            }
+        }
+
+        public async Task<ProductDto> UpdateProductWithImageAsync(int id, UpdateProductDto updateProductDto, IFormFile image)
+        {
+            try
+            {
+                // Get existing product
+                var existing = await _productRepository.GetProductByIdAsync(id);
+                if (existing == null)
+                {
+                    throw new NotFoundException($"Không tìm thấy sản phẩm với ID {id}");
+                }
+
+                // If we have a new image
+                if (image != null && image.Length > 0)
+                {
+                    // Kiểm tra rate limit
+                    await CheckRateLimit("update");
+
+                    // Allowed image types
+                    var allowedTypes = new[] { "image/jpeg", "image/jpg", "image/png", "image/gif" };
+                    if (!allowedTypes.Contains(image.ContentType.ToLower()))
+                    {
+                        throw new ArgumentException("Loại file không hợp lệ. Chỉ chấp nhận JPG, PNG và GIF.");
+                    }
+
+                    // Kiểm tra kích thước tối đa (8MB)
+                    if (image.Length > 8 * 1024 * 1024)
+                    {
+                        throw new ArgumentException("Kích thước file quá lớn. Tối đa 8MB.");
+                    }
+
+                    // Delete old image if exists
+                    if (!string.IsNullOrEmpty(existing.Image) && 
+                        (existing.Image.Contains("drive.google.com") || 
+                         existing.Image.Contains("thumbnail?id=") || 
+                         existing.Image.Contains("uc?id=")))
+                    {
+                        await DeleteProductImage(existing.Image);
+                    }
+
+                    // Sử dụng semaphore để giới hạn số lượng upload đồng thời
+                    await _uploadSemaphore.WaitAsync();
+                    try
+                    {
+                        // Upload new image
+                        var (fileId, _, _, fileUrl) = await _googleDriveService.UploadFile(image);
+                        existing.Image = fileUrl;
+                    }
+                    finally
+                    {
+                        _uploadSemaphore.Release();
+                    }
+                }
+
+                // Update other fields
+                existing.Name = updateProductDto.Name ?? existing.Name;
+                existing.Description = updateProductDto.Description ?? existing.Description;
+                existing.Price = updateProductDto.Price ?? existing.Price;
+                existing.IsAvailable = updateProductDto.IsAvailable ?? existing.IsAvailable;
+                existing.ProductTypeId = updateProductDto.ProductTypeId ?? existing.ProductTypeId;
+                existing.ProductBrandId = updateProductDto.ProductBrandId ?? existing.ProductBrandId;
+
+                var updated = await _productRepository.UpdateProductAsync(existing);
+                return MapToDto(updated);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error in UpdateProductWithImageAsync for ID {id}");
+                throw;
+            }
+        }
+
+        private async Task DeleteProductImage(string imageUrl)
+        {
+            try
+            {
+                // Extract file ID from the URL
+                var fileId = string.Empty;
+                
+                if (imageUrl.Contains("thumbnail?id="))
+                {
+                    fileId = imageUrl.Split("thumbnail?id=")[1].Split("&")[0];
+                }
+                else if (imageUrl.Contains("uc?id="))
+                {
+                    fileId = imageUrl.Split("uc?id=")[1].Split("&")[0];
+                }
+                else if (imageUrl.Contains("/d/"))
+                {
+                    fileId = imageUrl.Split("/d/")[1].Split("/")[0];
+                }
+
+                if (!string.IsNullOrEmpty(fileId))
+                {
+                    await _googleDriveService.DeleteFile(fileId);
+                    _logger.LogInformation($"Đã xóa ảnh cũ của sản phẩm: {fileId}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Failed to delete old product image: {ex.Message}");
+                // Log but continue with product update
+            }
+        }
+
+        // Phương thức kiểm tra rate limit
+        private async Task CheckRateLimit(string operation)
+        {
+            string key = $"{operation}";
+            
+            lock (_lastUploadTime)
+            {
+                if (_lastUploadTime.ContainsKey(key))
+                {
+                    // Kiểm tra thời gian giữa các lần upload (ít nhất 1 giây)
+                    TimeSpan timeSinceLastUpload = DateTime.UtcNow - _lastUploadTime[key];
+                    if (timeSinceLastUpload.TotalSeconds < 1)
+                    {
+                        throw new InvalidOperationException("Thao tác quá nhanh. Vui lòng thử lại sau.");
+                    }
+                    _lastUploadTime[key] = DateTime.UtcNow;
+                }
+                else
+                {
+                    _lastUploadTime[key] = DateTime.UtcNow;
+                }
+            }
+            
+            // Thêm delay nhỏ để đảm bảo không có quá nhiều request cùng lúc
+            await Task.Delay(100);
         }
 
         private ProductDto MapToDto(Product product)

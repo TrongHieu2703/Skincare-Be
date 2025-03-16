@@ -11,6 +11,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 
 namespace Skincare.Services.Implements
 {
@@ -19,15 +20,18 @@ namespace Skincare.Services.Implements
         private readonly IAccountRepository _accountRepository;
         private readonly ILogger<AuthenticationService> _logger;
         private readonly IConfiguration _configuration;
+        private readonly GoogleDriveService _googleDriveService;
 
         public AuthenticationService(
             IAccountRepository accountRepository,
             ILogger<AuthenticationService> logger,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            GoogleDriveService googleDriveService)
         {
             _accountRepository = accountRepository;
             _logger = logger;
             _configuration = configuration;
+            _googleDriveService = googleDriveService;
         }
 
         public async Task<LoginResponse> LoginAsync(LoginRequest loginRequest)
@@ -127,6 +131,35 @@ namespace Skincare.Services.Implements
             );
 
             return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+
+        public async Task<string> UploadAvatarForRegistration(IFormFile avatar)
+        {
+            try
+            {
+                // Validate file
+                if (avatar == null || avatar.Length == 0)
+                {
+                    throw new ArgumentException("No avatar file uploaded");
+                }
+
+                // Validate file type
+                var allowedTypes = new[] { "image/jpeg", "image/jpg", "image/png", "image/gif" };
+                if (!allowedTypes.Contains(avatar.ContentType.ToLower()))
+                {
+                    throw new ArgumentException("Invalid file type. Only jpg, jpeg, png and gif are allowed.");
+                }
+
+                // Sử dụng _googleDriveService đã tiêm thay vì tạo mới
+                var (fileId, _, _, fileUrl) = await _googleDriveService.UploadFile(avatar);
+                
+                return fileUrl;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error uploading avatar for registration");
+                throw;
+            }
         }
     }
 }

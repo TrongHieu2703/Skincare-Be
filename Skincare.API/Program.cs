@@ -7,6 +7,7 @@ using Skincare.API.Middleware;
 using System.Text.Json.Serialization;
 using Skincare.API.Configurations;
 using Microsoft.OpenApi.Models;
+using Skincare.Services.Implements;
 
 namespace Skincare.API
 {
@@ -39,6 +40,9 @@ namespace Skincare.API
 
             // Đăng ký Repository và Service
             services.AddServices();
+
+            // Đăng ký GoogleDriveService
+            services.AddSingleton<GoogleDriveService>();
 
             // Đọc cấu hình JWT từ appsettings.json
             var jwtSettings = configuration.GetSection("Jwt");
