@@ -1,4 +1,6 @@
-﻿namespace Skincare.BusinessObjects.DTOs
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace Skincare.BusinessObjects.DTOs
 {
     public class UpdateProductDto
     {

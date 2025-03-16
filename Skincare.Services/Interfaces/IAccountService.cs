@@ -1,6 +1,7 @@
 ﻿using Skincare.BusinessObjects.DTOs;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 
 namespace Skincare.Services.Interfaces
 {
@@ -13,5 +14,6 @@ namespace Skincare.Services.Interfaces
         Task DeleteAccountAsync(int id);
         Task<UProfileDTO> GetUserProfile(int id);
         Task UpdateProfileAsync(int userId, UProfileDTO profileDto);
+        Task<string> UploadAvatarAsync(int userId, IFormFile avatar);
     }
 }

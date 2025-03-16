@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 
 namespace Skincare.Services.Implements
 {
@@ -15,11 +16,16 @@ namespace Skincare.Services.Implements
     {
         private readonly IAccountRepository _accountRepository;
         private readonly ILogger<AccountService> _logger;
+        private readonly GoogleDriveService _googleDriveService;
 
-        public AccountService(IAccountRepository accountRepository, ILogger<AccountService> logger)
+        public AccountService(
+            IAccountRepository accountRepository, 
+            ILogger<AccountService> logger,
+            GoogleDriveService googleDriveService)
         {
             _accountRepository = accountRepository;
             _logger = logger;
+            _googleDriveService = googleDriveService;
         }
 
         public async Task<IEnumerable<AccountDto>> GetAllAccountsAsync()
@@ -162,15 +168,19 @@ namespace Skincare.Services.Implements
                 var account = await _accountRepository.GetAccountByIdAsync(userId);
                 if (account == null)
                 {
-                    // Quăng NotFoundException
                     throw new NotFoundException($"User ID {userId} not found.");
                 }
 
-                account.Username = profileDto.Username ?? account.Username;
-                account.Email = profileDto.Email ?? account.Email;
-                account.Address = profileDto.Address ?? account.Address;
-                account.Avatar = profileDto.Avatar ?? account.Avatar;
-                account.PhoneNumber = profileDto.PhoneNumber ?? account.PhoneNumber;
+                account.Username = string.IsNullOrEmpty(profileDto.Username) ? account.Username : profileDto.Username;
+                account.Email = string.IsNullOrEmpty(profileDto.Email) ? account.Email : profileDto.Email;
+                account.Address = string.IsNullOrEmpty(profileDto.Address) ? account.Address : profileDto.Address;
+                account.PhoneNumber = string.IsNullOrEmpty(profileDto.PhoneNumber) ? account.PhoneNumber : profileDto.PhoneNumber;
+                
+                // Chỉ cập nhật avatar nếu có giá trị mới
+                if (!string.IsNullOrEmpty(profileDto.Avatar))
+                {
+                    account.Avatar = profileDto.Avatar;
+                }
 
                 await _accountRepository.UpdateAccountAsync(account);
             }
@@ -220,6 +230,81 @@ namespace Skincare.Services.Implements
             {
                 _logger.LogError(ex, $"An error occurred while fetching user profile for account ID: {id}");
                 throw;
+            }
+        }
+
+        public async Task<string> UploadAvatarAsync(int userId, IFormFile avatar)
+        {
+            try
+            {
+                _logger.LogInformation($"Uploading avatar for user ID: {userId}");
+                
+                var account = await _accountRepository.GetAccountByIdAsync(userId);
+                if (account == null)
+                {
+                    throw new NotFoundException($"User with ID {userId} not found.");
+                }
+
+                // Validate file
+                if (avatar == null || avatar.Length == 0)
+                {
+                    throw new ArgumentException("No avatar file uploaded");
+                }
+
+                // Validate file type
+                var allowedTypes = new[] { "image/jpeg", "image/jpg", "image/png", "image/gif" };
+                if (!allowedTypes.Contains(avatar.ContentType.ToLower()))
+                {
+                    throw new ArgumentException("Invalid file type. Only jpg, jpeg, png and gif are allowed.");
+                }
+
+                // Delete old avatar if it exists
+                if (!string.IsNullOrEmpty(account.Avatar) && account.Avatar.Contains("drive.google.com"))
+                {
+                    await DeleteOldAvatar(account.Avatar);
+                }
+
+                // Upload to Google Drive
+                var (fileId, _, _, fileUrl) = await _googleDriveService.UploadFile(avatar);
+                
+                // Update account with new avatar URL
+                account.Avatar = fileUrl;
+                await _accountRepository.UpdateAccountAsync(account);
+                
+                return fileUrl;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error uploading avatar for user ID: {userId}");
+                throw;
+            }
+        }
+
+        private async Task DeleteOldAvatar(string avatarUrl)
+        {
+            try
+            {
+                // Extract file ID from the URL
+                var fileId = string.Empty;
+                
+                if (avatarUrl.Contains("uc?id="))
+                {
+                    fileId = avatarUrl.Split("uc?id=")[1].Split("&")[0];
+                }
+                else if (avatarUrl.Contains("/d/"))
+                {
+                    fileId = avatarUrl.Split("/d/")[1].Split("/")[0];
+                }
+
+                if (!string.IsNullOrEmpty(fileId))
+                {
+                    await _googleDriveService.DeleteFile(fileId);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Failed to delete old avatar: {ex.Message}");
+                // Just log the error but continue
             }
         }
     }
