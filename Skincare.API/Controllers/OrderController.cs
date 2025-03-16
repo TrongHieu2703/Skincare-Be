@@ -16,10 +16,12 @@ namespace Skincare.API.Controllers
     public class OrderController : ControllerBase
     {
         private readonly IOrderService _orderService;
+        private readonly ICartService _cartService;
         private readonly ILogger<OrderController> _logger;
-        public OrderController(IOrderService orderService, ILogger<OrderController> logger)
+        public OrderController(IOrderService orderService, ICartService cartService, ILogger<OrderController> logger)
         {
             _orderService = orderService;
+            _cartService = cartService;
             _logger = logger;
         }
 
@@ -101,6 +103,19 @@ namespace Skincare.API.Controllers
                 _logger.LogInformation($"Setting CustomerId to {userId} from JWT token");
 
                 var createdOrder = await _orderService.CreateOrderAsync(createOrderDto);
+                
+                // Sau khi đặt hàng thành công, xóa tất cả items trong giỏ hàng
+                try
+                {
+                    await _cartService.ClearUserCartAsync(userId);
+                    _logger.LogInformation($"Successfully cleared cart for user {userId} after order creation");
+                }
+                catch (Exception cartEx)
+                {
+                    // Log lỗi nhưng không làm ảnh hưởng đến việc đặt hàng thành công
+                    _logger.LogWarning(cartEx, $"Failed to clear cart for user {userId} after order creation");
+                }
+                
                 return CreatedAtAction(nameof(GetOrderById), new { id = createdOrder.Id }, new { message = "Order created successfully", data = createdOrder });
             }
             catch (Exception ex)
