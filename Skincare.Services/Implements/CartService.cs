@@ -15,12 +15,15 @@ namespace Skincare.Services.Implements
     {
         private readonly ICartRepository _cartRepository;
         private readonly IProductRepository _productRepository;
+        private readonly ICartItemRepository _cartItemRepository;
         private readonly ILogger<CartService> _logger;
 
-        public CartService(ICartRepository cartRepository, IProductRepository productRepository, ILogger<CartService> logger)
+        public CartService(ICartRepository cartRepository, IProductRepository productRepository, 
+                          ICartItemRepository cartItemRepository, ILogger<CartService> logger)
         {
             _cartRepository = cartRepository;
             _productRepository = productRepository;
+            _cartItemRepository = cartItemRepository;
             _logger = logger;
         }
 
@@ -153,7 +156,7 @@ namespace Skincare.Services.Implements
         {
             try
             {
-                return await _cartRepository.DeleteCartItemAsync(cartItemId);
+                return await _cartItemRepository.DeleteCartItemAsync(cartItemId);
             }
             catch (Exception ex)
             {
@@ -210,6 +213,45 @@ namespace Skincare.Services.Implements
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Error clearing cart for user ID {userId}");
+                throw;
+            }
+        }
+
+        public async Task<CartItemDTO> GetCartItemByIdAsync(int id)
+        {
+            try
+            {
+                var cartItem = await _cartItemRepository.GetCartItemByIdAsync(id);
+                if (cartItem == null)
+                    throw new NotFoundException($"Cart item with ID {id} not found");
+
+                return new CartItemDTO
+                {
+                    Id = cartItem.Id,
+                    CartId = cartItem.CartId ?? 0,
+                    ProductId = cartItem.ProductId ?? 0,
+                    Quantity = cartItem.Quantity ?? 0,
+                    ProductName = cartItem.Product?.Name ?? "Unknown Product",
+                    ProductImage = cartItem.Product?.Image,
+                    ProductPrice = cartItem.Product?.Price ?? 0
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error getting cart item with ID {id}");
+                throw;
+            }
+        }
+
+        public async Task<bool> UpdateCartItemAsync(int cartItemId, int quantity)
+        {
+            try
+            {
+                return await _cartItemRepository.UpdateCartItemAsync(cartItemId, quantity);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error updating cart item with ID {cartItemId}");
                 throw;
             }
         }

@@ -23,6 +23,7 @@ namespace Skincare.API.Configurations
             services.AddScoped<IVoucherService, VoucherService>();
             services.AddScoped<ITransactionService, TransactionService>();
             services.AddScoped<IBlogService, BlogService>();
+            
 
 
 
@@ -41,6 +42,7 @@ namespace Skincare.API.Configurations
             services.AddScoped<IVoucherRepository, VoucherRepository>();
             services.AddScoped<ITransactionRepository, TransactionRepository>();
             services.AddScoped<IBlogRepository, BlogRepository>();
+            services.AddScoped<ICartItemRepository, CartItemRepository>();
 
 
             // === Đăng ký IEmailService (bạn thêm dòng này!) ===

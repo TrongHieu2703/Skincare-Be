@@ -163,6 +163,69 @@ namespace Skincare.API.Controllers
                 _logger.LogError(ex, "Error clearing user cart");
                 return StatusCode(500, new { message = "Internal server error", details = ex.Message });
             }
+        } 
+
+        [HttpGet("item/{id}")]
+        public async Task<IActionResult> GetCartItemById(int id)
+        {
+            try
+            {
+                var cartItem = await _cartService.GetCartItemByIdAsync(id);
+                return Ok(new { message = "Fetched cart item successfully", data = cartItem });
+            }
+            catch (NotFoundException nfex)
+            {
+                _logger.LogWarning(nfex, $"Cart item not found with ID {id}");
+                return NotFound(new { message = nfex.Message, errorCode = "CART_ITEM_NOT_FOUND" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error fetching cart item with ID {id}");
+                return StatusCode(500, new { message = "Internal server error", details = ex.Message });
+            }
+        }
+
+        [HttpPut("item/{id}")]
+        public async Task<IActionResult> UpdateCartItem(int id, [FromBody] UpdateCartItemDTO dto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(new { message = "Invalid request data", errors = ModelState });
+
+            if (id != dto.CartItemId)
+                return BadRequest(new { message = "Cart item ID mismatch" });
+
+            try
+            {
+                var updated = await _cartService.UpdateCartItemAsync(id, dto.Quantity);
+                return Ok(new { message = "Cart item updated successfully", success = updated });
+            }
+            catch (NotFoundException nfex)
+            {
+                _logger.LogWarning(nfex, $"Cart item not found with ID {id}");
+                return NotFound(new { message = nfex.Message, errorCode = "CART_ITEM_NOT_FOUND" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error updating cart item with ID {id}");
+                return StatusCode(500, new { message = "Internal server error", details = ex.Message });
+            }
+        }
+
+        [HttpDelete("item/{id}")]
+        public async Task<IActionResult> DeleteCartItem(int id)
+        {
+            try
+            {
+                var success = await _cartService.DeleteCartItemAsync(id);
+                if (success)
+                    return NoContent();
+                return NotFound(new { message = $"Cart item with ID {id} not found", errorCode = "CART_ITEM_NOT_FOUND" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error deleting cart item with ID {id}");
+                return StatusCode(500, new { message = "Internal server error", details = ex.Message });
+            }
         }
     }
 }

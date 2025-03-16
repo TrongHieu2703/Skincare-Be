@@ -14,5 +14,7 @@ namespace Skincare.Services.Interfaces
         Task<bool> DeleteCartItemAsync(int cartItemId);
         Task DeleteCartAsync(int cartId);
         Task<bool> ClearUserCartAsync(int userId);
+        Task<CartItemDTO> GetCartItemByIdAsync(int id);
+        Task<bool> UpdateCartItemAsync(int cartItemId, int quantity);
     }
 }
