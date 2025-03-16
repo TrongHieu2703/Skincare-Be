@@ -8,9 +8,11 @@ namespace Skincare.Services.Interfaces
     {
         Task<IEnumerable<CartDTO>> GetAllCartsAsync(int pageNumber, int pageSize);
         Task<CartDTO> GetCartByIdAsync(int id);
-        Task<IEnumerable<CartDTO>> GetCartsByUserIdAsync(int userId);
+        Task<CartDTO> GetCartByUserIdAsync(int userId);
         Task<CartDTO> AddCartAsync(AddToCartDTO dto, int userId);
         Task<CartDTO> UpdateCartAsync(UpdateCartDTO dto);
-        Task DeleteCartAsync(int id);
+        Task<bool> DeleteCartItemAsync(int cartItemId);
+        Task DeleteCartAsync(int cartId);
+        Task<bool> ClearUserCartAsync(int userId);
     }
 }
