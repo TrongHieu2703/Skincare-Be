@@ -163,7 +163,7 @@ namespace Skincare.API.Controllers
                 _logger.LogError(ex, "Error clearing user cart");
                 return StatusCode(500, new { message = "Internal server error", details = ex.Message });
             }
-        }
+        } 
 
         [HttpGet("item/{id}")]
         public async Task<IActionResult> GetCartItemById(int id)
