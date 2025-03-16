@@ -68,12 +68,12 @@ namespace Skincare.API.Controllers
                 if (!int.TryParse(userIdStr, out var userId))
                     return Unauthorized(new { message = "Invalid user token" });
 
-                var carts = await _cartService.GetCartsByUserIdAsync(userId);
-                return Ok(new { message = "Fetched carts for user successfully", data = carts });
+                var cart = await _cartService.GetCartByUserIdAsync(userId);
+                return Ok(new { message = "Fetched cart for user successfully", data = cart });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error fetching carts for user");
+                _logger.LogError(ex, "Error fetching cart for user");
                 return StatusCode(500, new { message = "Internal server error", details = ex.Message });
             }
         }
@@ -142,6 +142,25 @@ namespace Skincare.API.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Error deleting cart with ID {id}");
+                return StatusCode(500, new { message = "Internal server error", details = ex.Message });
+            }
+        }
+
+        [HttpDelete("clear")]
+        public async Task<IActionResult> ClearUserCart()
+        {
+            try
+            {
+                var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!int.TryParse(userIdStr, out var userId))
+                    return Unauthorized(new { message = "Invalid user token" });
+
+                var success = await _cartService.ClearUserCartAsync(userId);
+                return Ok(new { message = "Cart cleared successfully", success });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error clearing user cart");
                 return StatusCode(500, new { message = "Internal server error", details = ex.Message });
             }
         }
