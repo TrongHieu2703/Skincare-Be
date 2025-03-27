@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using Skincare.BusinessObjects.DTOs;
 using Skincare.BusinessObjects.Entities;
-using Skincare.BusinessObjects.Exceptions; // <-- import custom exceptions
+using Skincare.BusinessObjects.Exceptions;
 using Skincare.Repositories.Interfaces;
 using Skincare.Services.Interfaces;
 using System;
@@ -11,6 +11,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 
 namespace Skincare.Services.Implements
 {
@@ -19,15 +20,18 @@ namespace Skincare.Services.Implements
         private readonly IAccountRepository _accountRepository;
         private readonly ILogger<AuthenticationService> _logger;
         private readonly IConfiguration _configuration;
+        private readonly FileService _fileService;
 
         public AuthenticationService(
             IAccountRepository accountRepository,
             ILogger<AuthenticationService> logger,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            FileService fileService)
         {
             _accountRepository = accountRepository;
             _logger = logger;
             _configuration = configuration;
+            _fileService = fileService;
         }
 
         public async Task<LoginResponse> LoginAsync(LoginRequest loginRequest)
@@ -35,11 +39,10 @@ namespace Skincare.Services.Implements
             try
             {
                 var account = await _accountRepository.GetByEmailAsync(loginRequest.Email);
-                // Giữ nguyên logic trả về null -> Unauthorized
                 if (account == null || !BCrypt.Net.BCrypt.Verify(loginRequest.Password, account.PasswordHash))
                 {
                     _logger.LogWarning("Invalid login attempt for {Email}", loginRequest.Email);
-                    return null; // Controller sẽ trả 401
+                    return null;
                 }
 
                 var token = GenerateJwtToken(account);
@@ -63,11 +66,9 @@ namespace Skincare.Services.Implements
         {
             try
             {
-                // Kiểm tra email tồn tại
                 var existingAccount = await _accountRepository.GetByEmailAsync(registerRequest.Email);
                 if (existingAccount != null)
                 {
-                    // Thay vì return null, quăng DuplicateEmailException
                     throw new DuplicateEmailException($"Email {registerRequest.Email} already exists.");
                 }
 
@@ -127,6 +128,32 @@ namespace Skincare.Services.Implements
             );
 
             return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+
+        public async Task<string> UploadAvatarForRegistration(IFormFile avatar)
+        {
+            try
+            {
+                if (avatar == null || avatar.Length == 0)
+                {
+                    throw new ArgumentException("No avatar file uploaded");
+                }
+
+                var allowedTypes = new[] { "image/jpeg", "image/jpg", "image/png", "image/gif" };
+                if (!allowedTypes.Contains(avatar.ContentType.ToLower()))
+                {
+                    throw new ArgumentException("Invalid file type. Only jpg, jpeg, png and gif are allowed.");
+                }
+
+                var fileUrl = await _fileService.SaveFileAsync(avatar, "avatar-images");
+                
+                return fileUrl;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error uploading avatar for registration");
+                throw;
+            }
         }
     }
 }

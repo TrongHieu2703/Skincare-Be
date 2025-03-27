@@ -7,6 +7,7 @@ using Skincare.Services.Interfaces;
 using System;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 
 namespace Skincare.API.Controllers
 {
@@ -35,6 +36,10 @@ namespace Skincare.API.Controllers
                     return Unauthorized(new { message = "Invalid user token" });
 
                 var profile = await _accountService.GetUserProfile(userId);
+                
+                // Log để debug
+                _logger.LogInformation($"User profile fetched. Avatar URL: {profile.Avatar}");
+                
                 return Ok(new { message = "User profile fetched successfully", data = profile });
             }
             catch (NotFoundException nfex)
@@ -112,6 +117,79 @@ namespace Skincare.API.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Error deleting account with ID {id}");
+                return StatusCode(500, new { message = "Internal server error", details = ex.Message });
+            }
+        }
+
+        // ============ API 5: Upload avatar ============
+        [HttpPost("upload-avatar")]
+        public async Task<IActionResult> UploadAvatar(IFormFile avatar)
+        {
+            try
+            {
+                var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (string.IsNullOrEmpty(userIdStr) || !int.TryParse(userIdStr, out var userId))
+                    return Unauthorized(new { message = "Invalid user token" });
+
+                var avatarUrl = await _accountService.UploadAvatarAsync(userId, avatar);
+                return Ok(new { message = "Avatar uploaded successfully", avatarUrl });
+            }
+            catch (NotFoundException nfex)
+            {
+                _logger.LogWarning(nfex, "User not found while uploading avatar");
+                return NotFound(new { message = nfex.Message, errorCode = "USER_NOT_FOUND" });
+            }
+            catch (ArgumentException aex)
+            {
+                _logger.LogWarning(aex, "Invalid file upload attempt");
+                return BadRequest(new { message = aex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error uploading avatar");
+                return StatusCode(500, new { message = "Internal server error", details = ex.Message });
+            }
+        }
+
+        // ============ API 6: Cập nhật thông tin user đăng nhập với avatar ============
+        [HttpPut("update-profile-with-avatar")]
+        public async Task<IActionResult> UpdateProfileWithAvatar([FromForm] string username, [FromForm] string email,
+            [FromForm] string address, [FromForm] string phoneNumber, IFormFile avatar)
+        {
+            try
+            {
+                var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!int.TryParse(userIdStr, out var userId))
+                    return Unauthorized(new { message = "Invalid user token" });
+
+                // Upload avatar nếu có
+                string avatarUrl = null;
+                if (avatar != null && avatar.Length > 0)
+                {
+                    avatarUrl = await _accountService.UploadAvatarAsync(userId, avatar);
+                }
+
+                // Tạo đối tượng profile để update
+                var profileDto = new UProfileDTO
+                {
+                    Username = username,
+                    Email = email,
+                    Address = address,
+                    PhoneNumber = phoneNumber,
+                    Avatar = avatarUrl ?? "" // Nếu không có avatar mới, giữ nguyên avatar cũ
+                };
+
+                await _accountService.UpdateProfileAsync(userId, profileDto);
+                return Ok(new { message = "Profile updated successfully", avatarUrl });
+            }
+            catch (NotFoundException nfex)
+            {
+                _logger.LogWarning(nfex, "User not found while updating profile");
+                return NotFound(new { message = nfex.Message, errorCode = "USER_NOT_FOUND" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating profile with avatar");
                 return StatusCode(500, new { message = "Internal server error", details = ex.Message });
             }
         }

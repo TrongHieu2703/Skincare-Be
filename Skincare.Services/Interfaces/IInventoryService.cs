@@ -11,5 +11,6 @@ namespace Skincare.Services.Interfaces
         Task<InventoryDto> CreateInventoryAsync(CreateInventoryDto createInventoryDto);
         Task<InventoryDto> UpdateInventoryAsync(int id, UpdateInventoryDto updateInventoryDto);
         Task DeleteInventoryAsync(int id);
+        Task<IEnumerable<InventoryDto>> GetInventoryByProductIdAsync(int productId);
     }
 }
