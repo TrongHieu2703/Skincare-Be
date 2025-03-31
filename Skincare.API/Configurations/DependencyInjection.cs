@@ -10,7 +10,7 @@ namespace Skincare.API.Configurations
     {
         public static void AddServices(this IServiceCollection services)
         {
-            // Register services
+            // Register Services
             services.AddScoped<IAccountService, AccountService>();
             services.AddScoped<IOrderService, OrderService>();
             services.AddScoped<IProductService, ProductService>();
@@ -19,17 +19,16 @@ namespace Skincare.API.Configurations
             services.AddScoped<IInventoryService, InventoryService>();
             services.AddScoped<ICartService, CartService>();
             services.AddScoped<IFaqService, FaqService>();
-            services.AddScoped<IReviewService, ReviewService>();
             services.AddScoped<IVoucherService, VoucherService>();
             services.AddScoped<ITransactionService, TransactionService>();
             services.AddScoped<IBlogService, BlogService>();
-            
-
-
-
-
-
-            // Register repositories
+            services.AddScoped<IFileService, FileService>();
+            services.AddScoped<IProductTypeService, ProductTypeService>();
+            services.AddScoped<ISkinTypeService, SkinTypeService>();
+            services.AddScoped<IEmailService, EmailService>();
+            services.AddScoped<IBranchService, BranchService>();
+            services.AddScoped<IDashboardService, DashboardService>();
+            // Register Repositories
             services.AddScoped<IAccountRepository, AccountRepository>();
             services.AddScoped<IOrderRepository, OrderRepository>();
             services.AddScoped<IProductRepository, ProductRepository>();
@@ -38,15 +37,15 @@ namespace Skincare.API.Configurations
             services.AddScoped<IInventoryRepository, InventoryRepository>();
             services.AddScoped<ICartRepository, CartRepository>();
             services.AddScoped<IFaqRepository, FaqRepository>();
-            services.AddScoped<IReviewRepository, ReviewRepository>();
             services.AddScoped<IVoucherRepository, VoucherRepository>();
             services.AddScoped<ITransactionRepository, TransactionRepository>();
             services.AddScoped<IBlogRepository, BlogRepository>();
             services.AddScoped<ICartItemRepository, CartItemRepository>();
-
-
-            // === Đăng ký IEmailService (bạn thêm dòng này!) ===
-            services.AddScoped<IEmailService, EmailService>();
+            services.AddScoped<IProductSkinTypeRepository, ProductSkinTypeRepository>();
+            services.AddScoped<ISkinTypeRepository, SkinTypeRepository>();
+            services.AddScoped<IProductTypeRepository, ProductTypeRepository>();
+            services.AddScoped<IBranchRepository, BranchRepository>();
+            services.AddScoped<IDashboardRepository, DashboardRepository>();
         }
     }
 }

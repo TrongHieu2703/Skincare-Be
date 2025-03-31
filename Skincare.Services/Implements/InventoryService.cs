@@ -31,6 +31,7 @@ namespace Skincare.Services.Implements
                 ProductId = inventory.ProductId,
                 BranchId = inventory.BranchId,
                 Quantity = inventory.Quantity,
+                Stock = inventory.Stock,
                 BranchName = inventory.Branch?.Name,
                 ProductName = inventory.Product?.Name
             };
@@ -38,14 +39,14 @@ namespace Skincare.Services.Implements
 
         public async Task<IEnumerable<InventoryDto>> GetAllInventoriesAsync()
         {
-            var inventories = await _inventoryRepository.GetAllInventoryAsync();
+            var inventories = await _inventoryRepository.GetAllAsync();
             return inventories.Select(MapToDto).ToList();
         }
 
         public async Task<InventoryDto> GetInventoryByIdAsync(int id)
         {
             _logger.LogInformation("Retrieving inventory with ID {InventoryId}", id);
-            var inventory = await _inventoryRepository.GetInventoryByIdAsync(id);
+            var inventory = await _inventoryRepository.GetByIdAsync(id);
             if (inventory == null)
                 throw new NotFoundException($"Inventory with ID {id} not found.");
             return MapToDto(inventory);
@@ -53,28 +54,43 @@ namespace Skincare.Services.Implements
 
         public async Task<InventoryDto> CreateInventoryAsync(CreateInventoryDto createInventoryDto)
         {
-            var inventory = await _inventoryRepository.CreateInventoryAsync(createInventoryDto);
-            return MapToDto(inventory);
+            var inventory = new Inventory
+            {
+                ProductId = createInventoryDto.ProductId,
+                BranchId = createInventoryDto.BranchId,
+                Quantity = createInventoryDto.Quantity ?? 0,
+                Stock = createInventoryDto.Stock
+            };
+            
+            var createdInventory = await _inventoryRepository.CreateAsync(inventory);
+            return MapToDto(createdInventory);
         }
 
         public async Task<InventoryDto> UpdateInventoryAsync(int id, UpdateInventoryDto updateInventoryDto)
         {
-            var inventory = await _inventoryRepository.GetInventoryByIdAsync(id);
+            var inventory = await _inventoryRepository.GetByIdAsync(id);
             if (inventory == null)
                 throw new NotFoundException($"Inventory with ID {id} not found for update.");
 
             inventory.Quantity = updateInventoryDto.Quantity ?? inventory.Quantity;
-            var updatedInventory = await _inventoryRepository.UpdateInventoryAsync(inventory);
+            inventory.Stock = updateInventoryDto.Stock;
+            var updatedInventory = await _inventoryRepository.UpdateAsync(inventory);
             return MapToDto(updatedInventory);
         }
 
         public async Task DeleteInventoryAsync(int id)
         {
             _logger.LogInformation("Deleting inventory with ID {InventoryId}", id);
-            var inventory = await _inventoryRepository.GetInventoryByIdAsync(id);
+            var inventory = await _inventoryRepository.GetByIdAsync(id);
             if (inventory == null)
                 throw new NotFoundException($"Inventory with ID {id} not found for deletion.");
-            await _inventoryRepository.DeleteInventoryAsync(id);
+            await _inventoryRepository.DeleteAsync(id);
+        }
+
+        public async Task<IEnumerable<InventoryDto>> GetInventoryByProductIdAsync(int productId)
+        {
+            var inventories = await _inventoryRepository.GetByProductIdAsync(productId);
+            return inventories.Select(MapToDto).ToList();
         }
     }
 }

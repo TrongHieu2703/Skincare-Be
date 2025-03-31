@@ -13,6 +13,7 @@ namespace Skincare.BusinessObjects.DTOs
     public string Status { get; set; }
     public decimal? TotalAmount { get; set; }
     public List<TransactionDto> Transactions { get; set; } = new List<TransactionDto>();
+    public bool UpdateTransactionStatus { get; set; } = false;
 }
 
 

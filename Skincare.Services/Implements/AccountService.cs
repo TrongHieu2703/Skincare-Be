@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 
 namespace Skincare.Services.Implements
 {
@@ -15,11 +16,16 @@ namespace Skincare.Services.Implements
     {
         private readonly IAccountRepository _accountRepository;
         private readonly ILogger<AccountService> _logger;
+        private readonly FileService _fileService;
 
-        public AccountService(IAccountRepository accountRepository, ILogger<AccountService> logger)
+        public AccountService(
+            IAccountRepository accountRepository, 
+            ILogger<AccountService> logger,
+            FileService fileService)
         {
             _accountRepository = accountRepository;
             _logger = logger;
+            _fileService = fileService;
         }
 
         public async Task<IEnumerable<AccountDto>> GetAllAccountsAsync()
@@ -57,7 +63,6 @@ namespace Skincare.Services.Implements
                 var account = await _accountRepository.GetAccountByIdAsync(id);
                 if (account == null)
                 {
-                    // Quăng NotFoundException thay vì return null
                     throw new NotFoundException($"Account with ID {id} not found.");
                 }
 
@@ -89,7 +94,6 @@ namespace Skincare.Services.Implements
                 var account = await _accountRepository.GetByEmailAsync(email);
                 if (account == null)
                 {
-                    // Quăng NotFoundException nếu muốn
                     throw new NotFoundException($"Account with email {email} not found.");
                 }
 
@@ -162,15 +166,36 @@ namespace Skincare.Services.Implements
                 var account = await _accountRepository.GetAccountByIdAsync(userId);
                 if (account == null)
                 {
-                    // Quăng NotFoundException
                     throw new NotFoundException($"User ID {userId} not found.");
                 }
 
-                account.Username = profileDto.Username ?? account.Username;
-                account.Email = profileDto.Email ?? account.Email;
-                account.Address = profileDto.Address ?? account.Address;
-                account.Avatar = profileDto.Avatar ?? account.Avatar;
-                account.PhoneNumber = profileDto.PhoneNumber ?? account.PhoneNumber;
+                if (!string.IsNullOrEmpty(profileDto.Email) && profileDto.Email != account.Email)
+                {
+                    var existingUserWithEmail = await _accountRepository.GetByEmailAsync(profileDto.Email);
+                    if (existingUserWithEmail != null && existingUserWithEmail.Id != userId)
+                    {
+                        throw new DuplicateEmailException($"Email {profileDto.Email} already exists.");
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(profileDto.PhoneNumber) && profileDto.PhoneNumber != account.PhoneNumber)
+                {
+                    var existingUserWithPhone = await _accountRepository.GetByPhoneNumberAsync(profileDto.PhoneNumber);
+                    if (existingUserWithPhone != null && existingUserWithPhone.Id != userId)
+                    {
+                        throw new DuplicatePhoneNumberException($"Phone number {profileDto.PhoneNumber} already exists.");
+                    }
+                }
+
+                account.Username = string.IsNullOrEmpty(profileDto.Username) ? account.Username : profileDto.Username;
+                account.Email = string.IsNullOrEmpty(profileDto.Email) ? account.Email : profileDto.Email;
+                account.Address = string.IsNullOrEmpty(profileDto.Address) ? account.Address : profileDto.Address;
+                account.PhoneNumber = string.IsNullOrEmpty(profileDto.PhoneNumber) ? account.PhoneNumber : profileDto.PhoneNumber;
+                
+                if (!string.IsNullOrEmpty(profileDto.Avatar))
+                {
+                    account.Avatar = profileDto.Avatar;
+                }
 
                 await _accountRepository.UpdateAccountAsync(account);
             }
@@ -203,7 +228,6 @@ namespace Skincare.Services.Implements
                 var account = await _accountRepository.GetAccountByIdAsync(id);
                 if (account == null)
                 {
-                    // Quăng NotFoundException
                     throw new NotFoundException($"User profile not found for account ID {id}.");
                 }
 
@@ -219,6 +243,49 @@ namespace Skincare.Services.Implements
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"An error occurred while fetching user profile for account ID: {id}");
+                throw;
+            }
+        }
+
+        public async Task<string?> UploadAvatarAsync(int userId, IFormFile? avatar)
+        {
+            try
+            {
+                _logger.LogInformation($"Uploading avatar for user ID: {userId}");
+                
+                var account = await _accountRepository.GetAccountByIdAsync(userId);
+                if (account == null)
+                {
+                    throw new NotFoundException($"User with ID {userId} not found.");
+                }
+
+                if (avatar == null || avatar.Length == 0)
+                {
+                    // No avatar to upload, return null
+                    return null;
+                }
+
+                var allowedTypes = new[] { "image/jpeg", "image/jpg", "image/png", "image/gif" };
+                if (!allowedTypes.Contains(avatar.ContentType.ToLower()))
+                {
+                    throw new ArgumentException("Invalid file type. Only jpg, jpeg, png and gif are allowed.");
+                }
+
+                if (!string.IsNullOrEmpty(account.Avatar))
+                {
+                    _fileService.DeleteFile(account.Avatar);
+                }
+
+                var fileUrl = await _fileService.SaveFileAsync(avatar, "avatar-images");
+                
+                account.Avatar = fileUrl;
+                await _accountRepository.UpdateAccountAsync(account);
+                
+                return fileUrl;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error uploading avatar for user ID: {userId}");
                 throw;
             }
         }

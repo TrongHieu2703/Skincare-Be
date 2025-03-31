@@ -4,6 +4,7 @@ using Skincare.BusinessObjects.Exceptions;
 using Skincare.Services.Interfaces;
 using System;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Skincare.API.Controllers
 {
@@ -32,7 +33,7 @@ namespace Skincare.API.Controllers
             }
         }
 
-        [HttpGet("{id}")]
+        [HttpGet("{id:int}")]
         public async Task<IActionResult> GetVoucherById(int id)
         {
             try
@@ -51,6 +52,7 @@ namespace Skincare.API.Controllers
         }
 
         [HttpPost]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> CreateVoucher([FromBody] CreateVoucherDto createVoucherDto)
         {
             if (createVoucherDto == null)
@@ -69,6 +71,7 @@ namespace Skincare.API.Controllers
         }
 
         [HttpPut("{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> UpdateVoucher(int id, [FromBody] UpdateVoucherDto updateVoucherDto)
         {
             if (updateVoucherDto == null)
@@ -89,6 +92,7 @@ namespace Skincare.API.Controllers
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteVoucher(int id)
         {
             try
@@ -99,6 +103,21 @@ namespace Skincare.API.Controllers
             catch (NotFoundException nfex)
             {
                 return NotFound(new { message = nfex.Message, errorCode = "VOUCHER_NOT_FOUND" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+            }
+        }
+
+        [HttpGet("available")]
+        [Route("api/[controller]/available")]
+        public async Task<IActionResult> GetAvailableVouchers()
+        {
+            try
+            {
+                var vouchers = await _voucherService.GetAvailableVouchersAsync();
+                return Ok(new { message = "Fetched available vouchers successfully", data = vouchers });
             }
             catch (Exception ex)
             {

@@ -105,5 +105,19 @@ namespace Skincare.API.Controllers
                 return StatusCode(500, new { message = "Internal server error", error = ex.Message });
             }
         }
+
+        [HttpGet("by-product/{productId}")]
+        public async Task<IActionResult> GetInventoryByProductId(int productId)
+        {
+            try
+            {
+                var inventories = await _inventoryService.GetInventoryByProductIdAsync(productId);
+                return Ok(new { message = "Fetched inventory successfully", data = inventories });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+            }
+        }
     }
 }

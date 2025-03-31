@@ -25,6 +25,10 @@ public partial class Product
 
     public int? InventoryId { get; set; }
 
+    public int? Quantity { get; set; }
+
+    public int? Stock { get; set; }
+
     public virtual ICollection<CartItem> CartItems { get; set; } = new List<CartItem>();
 
     public virtual ICollection<Inventory> Inventories { get; set; } = new List<Inventory>();
