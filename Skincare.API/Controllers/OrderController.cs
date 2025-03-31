@@ -7,6 +7,8 @@ using Skincare.Services.Interfaces;
 using System;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace Skincare.API.Controllers
 {
@@ -18,11 +20,15 @@ namespace Skincare.API.Controllers
         private readonly IOrderService _orderService;
         private readonly ICartService _cartService;
         private readonly ILogger<OrderController> _logger;
-        public OrderController(IOrderService orderService, ICartService cartService, ILogger<OrderController> logger)
+
+        public OrderController(
+            IOrderService orderService,
+            ICartService cartService,
+            ILogger<OrderController> logger)
         {
-            _orderService = orderService;
-            _cartService = cartService;
-            _logger = logger;
+            _orderService = orderService ?? throw new ArgumentNullException(nameof(orderService));
+            _cartService = cartService ?? throw new ArgumentNullException(nameof(cartService));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
         [HttpGet]
@@ -67,9 +73,22 @@ namespace Skincare.API.Controllers
             try
             {
                 var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                _logger.LogInformation($"GetOrdersByUser called for user ID: {userIdStr}");
+                
                 if (string.IsNullOrEmpty(userIdStr) || !int.TryParse(userIdStr, out var userId))
                     return Unauthorized(new { message = "Invalid user token" });
+                
                 var orders = await _orderService.GetOrdersByUserIdAsync(userId);
+                _logger.LogInformation($"Retrieved {orders.Count()} orders for user {userId}");
+                
+                // Log first order's items if any
+                var firstOrder = orders.FirstOrDefault();
+                if (firstOrder != null && firstOrder.OrderItems.Any())
+                {
+                    var firstItem = firstOrder.OrderItems.First();
+                    _logger.LogInformation($"Sample order item: ProductId={firstItem.ProductId}, ProductName={firstItem.ProductName}, HasImage={(firstItem.ProductImage != null)}");
+                }
+                
                 return Ok(new { message = "Fetched orders for user successfully", data = orders });
             }
             catch (Exception ex)
@@ -116,7 +135,48 @@ namespace Skincare.API.Controllers
                     _logger.LogWarning(cartEx, $"Failed to clear cart for user {userId} after order creation");
                 }
                 
-                return CreatedAtAction(nameof(GetOrderById), new { id = createdOrder.Id }, new { message = "Order created successfully", data = createdOrder });
+                return CreatedAtAction(nameof(GetOrderById), new { id = createdOrder.Id }, 
+                    new { message = "Order created successfully", data = createdOrder });
+            }
+            catch (NotFoundException nfex)
+            {
+                _logger.LogWarning(nfex, "Product not found during order creation");
+                return BadRequest(new { 
+                    message = nfex.Message,
+                    errorCode = "PRODUCT_NOT_FOUND"
+                });
+            }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("expired"))
+            {
+                return BadRequest(new { 
+                    message = "Voucher đã hết hạn. Vui lòng chọn voucher khác.", 
+                    errorCode = "VOUCHER_EXPIRED" 
+                });
+            }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("fully redeemed"))
+            {
+                return BadRequest(new { 
+                    message = "Voucher đã hết lượt sử dụng. Vui lòng chọn voucher khác.", 
+                    errorCode = "VOUCHER_FULLY_REDEEMED" 
+                });
+            }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("at least"))
+            {
+                // Extract the minimum order value if possible
+                decimal minValue = 0;
+                var match = Regex.Match(ex.Message, @"at least ([0-9,.]+)");
+                if (match.Success)
+                {
+                    decimal.TryParse(match.Groups[1].Value, out minValue);
+                }
+                
+                string formattedMinValue = minValue.ToString("N0") + " đ";
+                
+                return BadRequest(new { 
+                    message = $"Đơn hàng của bạn chưa đạt giá trị tối thiểu {formattedMinValue} để áp dụng voucher này.", 
+                    errorCode = "VOUCHER_MIN_ORDER_NOT_MET",
+                    details = new { minOrderValue = minValue } 
+                });
             }
             catch (Exception ex)
             {
@@ -173,21 +233,17 @@ namespace Skincare.API.Controllers
         {
             try
             {
-                var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(userIdStr) || !int.TryParse(userIdStr, out var userId))
-                    return Unauthorized(new { message = "Invalid user token" });
-                    
-                var order = await _orderService.GetOrderByUser(id, userId);
-                return Ok(new { message = "Fetched order detail successfully", data = order });
+                var orderDetail = await _orderService.GetOrderDetailAsync(id);
+                return Ok(new { message = "Order detail retrieved successfully", data = orderDetail });
             }
             catch (NotFoundException nfex)
             {
-                _logger.LogWarning(nfex, $"Order detail not found with ID {id} for this user");
+                _logger.LogWarning(nfex, $"Order not found with ID {id}");
                 return NotFound(new { message = nfex.Message, errorCode = "ORDER_NOT_FOUND" });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error fetching detailed order with ID {id}");
+                _logger.LogError(ex, $"Error fetching order detail with ID {id}");
                 return StatusCode(500, new { message = "Internal server error", details = ex.Message });
             }
         }

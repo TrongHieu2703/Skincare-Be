@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http;
 using Skincare.BusinessObjects.DTOs;
 using Skincare.BusinessObjects.Entities;
 using System.Threading.Tasks;
@@ -11,6 +11,6 @@ namespace Skincare.Services.Interfaces
         Task<LoginResponse> RegisterAsync(RegisterRequest registerRequest);
         string GenerateJwtToken(Account account);
         
-        Task<string> UploadAvatarForRegistration(IFormFile avatar);
+        Task<string?> UploadAvatarForRegistration(IFormFile? avatar);
     }
 }

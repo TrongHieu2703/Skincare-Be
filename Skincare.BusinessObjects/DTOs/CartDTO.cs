@@ -19,6 +19,7 @@ namespace Skincare.BusinessObjects.DTOs
         public string ProductName { get; set; }
         public string ProductImage { get; set; }
         public decimal ProductPrice { get; set; }
+        public int? ProductStock { get; set; }
     }
 
     public class AddToCartDTO

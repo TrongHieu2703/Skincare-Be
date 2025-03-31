@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Skincare.BusinessObjects.DTOs;
 using Skincare.BusinessObjects.Exceptions; // import custom exceptions
@@ -40,6 +40,12 @@ namespace Skincare.API.Controllers
                 _logger.LogWarning(dex, "Email already exists");
                 return Conflict(new { message = dex.Message, errorCode = "DUPLICATE_EMAIL" });
             }
+            catch (DuplicatePhoneNumberException dpex)
+            {
+                // Số điện thoại trùng -> 409 Conflict
+                _logger.LogWarning(dpex, "Phone number already exists");
+                return Conflict(new { message = dpex.Message, errorCode = "DUPLICATE_PHONE" });
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error during registration");
@@ -79,30 +85,41 @@ namespace Skincare.API.Controllers
         }
 
         [HttpPost("register-with-avatar")]
-        public async Task<IActionResult> RegisterWithAvatar([FromForm] string username, [FromForm] string email, 
-            [FromForm] string password, [FromForm] string phoneNumber, [FromForm] string address, IFormFile avatar)
+        public async Task<IActionResult> RegisterWithAvatar(
+            [FromForm] string username, 
+            [FromForm] string email, 
+            [FromForm] string password, 
+            [FromForm] string phoneNumber, 
+            [FromForm] string address, 
+            IFormFile? avatar) // Explicitly mark as nullable
         {
             try
             {
+                _logger.LogInformation("Starting register-with-avatar: Username={Username}, Email={Email}, HasAvatar={HasAvatar}", 
+                    username, email, avatar != null);
+                
                 if (!ModelState.IsValid)
                     return BadRequest(new { message = "Invalid request data", errors = ModelState });
                 
                 // Upload avatar trước
-                string avatarUrl = null;
+                string? avatarUrl = null;
                 if (avatar != null && avatar.Length > 0)
                 {
-                    // Tạo tài khoản tạm thời để upload avatar
-                    var tempAccount = new RegisterRequest
+                    try
                     {
-                        Username = username,
-                        Email = email,
-                        Password = password,
-                        PhoneNumber = phoneNumber,
-                        Address = address
-                    };
-                    
-                    // Upload avatar và lấy URL
-                    avatarUrl = await _authenticationService.UploadAvatarForRegistration(avatar);
+                        _logger.LogInformation("Uploading avatar file: {FileName}, {FileSize}KB, {ContentType}", 
+                            avatar.FileName, avatar.Length / 1024, avatar.ContentType);
+                        
+                        // Upload avatar và lấy URL
+                        avatarUrl = await _authenticationService.UploadAvatarForRegistration(avatar);
+                        
+                        _logger.LogInformation("Avatar uploaded successfully. URL: {AvatarUrl}", avatarUrl);
+                    }
+                    catch (ArgumentException ex)
+                    {
+                        // Nếu có lỗi khi upload avatar, ghi log nhưng vẫn tiếp tục đăng ký
+                        _logger.LogWarning(ex, "Error uploading avatar during registration, continuing without avatar");
+                    }
                 }
                 
                 // Tạo request đăng ký với avatar URL
@@ -113,16 +130,28 @@ namespace Skincare.API.Controllers
                     Password = password,
                     PhoneNumber = phoneNumber,
                     Address = address,
-                    Avatar = avatarUrl
+                    Avatar = avatarUrl  // Có thể null nếu không có avatar
                 };
                 
+                _logger.LogInformation("Creating account with Username={Username}, Email={Email}, AvatarUrl={AvatarUrl}", 
+                    request.Username, request.Email, request.Avatar);
+                
                 var response = await _authenticationService.RegisterAsync(request);
+                
+                _logger.LogInformation("Registration successful. User ID: {UserId}, Username: {Username}, Avatar: {Avatar}", 
+                    response.Id, response.Username, response.Avatar);
+                
                 return Ok(new { message = "Registration successful", data = response });
             }
             catch (DuplicateEmailException dex)
             {
                 _logger.LogWarning(dex, "Email already exists");
                 return Conflict(new { message = dex.Message, errorCode = "DUPLICATE_EMAIL" });
+            }
+            catch (DuplicatePhoneNumberException dpex)
+            {
+                _logger.LogWarning(dpex, "Phone number already exists");
+                return Conflict(new { message = dpex.Message, errorCode = "DUPLICATE_PHONE" });
             }
             catch (Exception ex)
             {

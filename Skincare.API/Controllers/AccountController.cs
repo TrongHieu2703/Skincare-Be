@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Skincare.BusinessObjects.DTOs;
@@ -74,6 +74,16 @@ namespace Skincare.API.Controllers
             {
                 _logger.LogWarning(nfex, "User not found while updating profile");
                 return NotFound(new { message = nfex.Message, errorCode = "USER_NOT_FOUND" });
+            }
+            catch (DuplicateEmailException deex)
+            {
+                _logger.LogWarning(deex, "Duplicate email detected during profile update");
+                return Conflict(new { message = deex.Message, errorCode = "DUPLICATE_EMAIL" });
+            }
+            catch (DuplicatePhoneNumberException dpex)
+            {
+                _logger.LogWarning(dpex, "Duplicate phone number detected during profile update");
+                return Conflict(new { message = dpex.Message, errorCode = "DUPLICATE_PHONE" });
             }
             catch (Exception ex)
             {
@@ -153,8 +163,12 @@ namespace Skincare.API.Controllers
 
         // ============ API 6: Cập nhật thông tin user đăng nhập với avatar ============
         [HttpPut("update-profile-with-avatar")]
-        public async Task<IActionResult> UpdateProfileWithAvatar([FromForm] string username, [FromForm] string email,
-            [FromForm] string address, [FromForm] string phoneNumber, IFormFile avatar)
+        public async Task<IActionResult> UpdateProfileWithAvatar(
+            [FromForm] string username, 
+            [FromForm] string email,
+            [FromForm] string address, 
+            [FromForm] string phoneNumber, 
+            IFormFile? avatar) // Explicitly mark as nullable
         {
             try
             {
@@ -162,8 +176,11 @@ namespace Skincare.API.Controllers
                 if (!int.TryParse(userIdStr, out var userId))
                     return Unauthorized(new { message = "Invalid user token" });
 
+                // Lấy profile hiện tại để giữ lại avatar cũ nếu không có avatar mới
+                var currentProfile = await _accountService.GetUserProfile(userId);
+
                 // Upload avatar nếu có
-                string avatarUrl = null;
+                string? avatarUrl = null;
                 if (avatar != null && avatar.Length > 0)
                 {
                     avatarUrl = await _accountService.UploadAvatarAsync(userId, avatar);
@@ -176,11 +193,11 @@ namespace Skincare.API.Controllers
                     Email = email,
                     Address = address,
                     PhoneNumber = phoneNumber,
-                    Avatar = avatarUrl ?? "" // Nếu không có avatar mới, giữ nguyên avatar cũ
+                    Avatar = avatarUrl ?? currentProfile.Avatar // Giữ lại avatar cũ nếu không có avatar mới
                 };
 
                 await _accountService.UpdateProfileAsync(userId, profileDto);
-                return Ok(new { message = "Profile updated successfully", avatarUrl });
+                return Ok(new { message = "Profile updated successfully", avatarUrl = profileDto.Avatar });
             }
             catch (NotFoundException nfex)
             {

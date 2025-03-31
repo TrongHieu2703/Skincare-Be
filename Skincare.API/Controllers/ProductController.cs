@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Caching.Memory;
@@ -9,6 +9,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
+using Skincare.Services.Implements;
+using System.Text.Json;
 
 namespace Skincare.API.Controllers
 {
@@ -21,81 +23,143 @@ namespace Skincare.API.Controllers
         private readonly IMemoryCache _cache;
         private readonly TimeSpan _cacheDuration = TimeSpan.FromMinutes(5); // Cache 5 phút
 
+        private readonly IFileService _fileService;
+
         public ProductController(
             IProductService productService,
             ILogger<ProductController> logger,
-            IMemoryCache cache)
+            IMemoryCache cache,
+            IFileService fileService)
         {
             _productService = productService;
             _logger = logger;
             _cache = cache;
+            _fileService = fileService;
         }
 
         // GET: api/Product
         [HttpGet]
-        [ResponseCache(VaryByQueryKeys = new[] { "pageNumber", "pageSize" }, Duration = 300)] // 300 giây = 5 phút
-        public async Task<IActionResult> GetAllProducts([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
+        public async Task<IActionResult> GetAllProducts(
+            [FromQuery] int pageNumber = 1, 
+            [FromQuery] int pageSize = 10,
+            [FromQuery] int? skinTypeId = null,
+            [FromQuery] int? productTypeId = null,
+            [FromQuery] int? branchId = null,
+            [FromQuery] decimal? minPrice = null,
+            [FromQuery] decimal? maxPrice = null,
+            [FromQuery] decimal? minRating = null,
+            [FromQuery] decimal? maxRating = null,
+            [FromQuery] string sortBy = null)
         {
             try
             {
-                string cacheKey = $"Products_Page{pageNumber}_Size{pageSize}";
+                _logger.LogInformation($"Getting products page {pageNumber}, size {pageSize} with filters: " +
+                    $"skinTypeId={skinTypeId}, productTypeId={productTypeId}, branchId={branchId}, " +
+                    $"price range={minPrice}-{maxPrice}, rating range={minRating}-{maxRating}, sortBy={sortBy}");
+
+                var (products, totalPages, totalItems) = await _productService.GetProductsWithFiltersAsync(
+                    pageNumber, pageSize, skinTypeId, productTypeId, branchId, minPrice, maxPrice, minRating, maxRating, sortBy);
                 
-                // Kiểm tra dữ liệu trong cache
-                if (_cache.TryGetValue(cacheKey, out object cachedResponse))
-                {
-                    _logger.LogInformation($"Returning cached products data for page {pageNumber}");
-                    return Ok(cachedResponse);
-                }
+                _logger.LogInformation($"Retrieved {products.Count()} products, Total pages: {totalPages}, Total items: {totalItems}");
                 
-                // Nếu không có trong cache, lấy từ database
-                var products = await _productService.GetAllProductsAsync(pageNumber, pageSize);
-                var response = new { message = "Products retrieved successfully", data = products };
-                
-                // Lưu vào cache
-                _cache.Set(cacheKey, response, _cacheDuration);
-                
+                var response = new { 
+                    message = "Products retrieved successfully", 
+                    data = products,
+                    pagination = new {
+                        currentPage = pageNumber,
+                        pageSize = pageSize,
+                        totalPages = totalPages,
+                        totalItems = totalItems
+                    }
+                };
+
+                _logger.LogInformation($"Sending response with pagination: {JsonSerializer.Serialize(response.pagination)}");
                 return Ok(response);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error retrieving products");
+                _logger.LogError(ex, "Error in GetAllProducts: {ErrorMessage}", ex.Message);
                 return StatusCode(500, new { message = "Internal server error", details = ex.Message });
             }
         }
 
         // GET: api/Product/5
         [HttpGet("{id}")]
-        [ResponseCache(VaryByHeader = "Authorization", VaryByQueryKeys = new[] { "id" }, Duration = 300)]
         public async Task<IActionResult> GetProduct(int id)
         {
             try
             {
-                string cacheKey = $"Product_{id}";
-                
-                // Kiểm tra dữ liệu trong cache
-                if (_cache.TryGetValue(cacheKey, out object cachedResponse))
-                {
-                    _logger.LogInformation($"Returning cached product data for ID {id}");
-                    return Ok(cachedResponse);
-                }
-                
-                // Nếu không có trong cache, lấy từ database
                 var product = await _productService.GetProductByIdAsync(id);
-                var response = new { message = "Product retrieved successfully", data = product };
-                
-                // Lưu vào cache
-                _cache.Set(cacheKey, response, _cacheDuration);
-                
-                return Ok(response);
-            }
-            catch (NotFoundException nfex)
-            {
-                _logger.LogWarning(nfex, "Product not found");
-                return NotFound(new { message = nfex.Message, errorCode = "PRODUCT_NOT_FOUND" });
+
+                if (product == null)
+                {
+                    _logger.LogWarning($"Product with ID {id} not found");
+                    return NotFound(new { message = "Product not found", errorCode = "PRODUCT_NOT_FOUND" });
+                }
+
+                if (!string.IsNullOrEmpty(product.Image))
+                {
+                    if (!product.Image.StartsWith("/"))
+                    {
+                        product.Image = "/" + product.Image;
+                    }
+                }
+
+                return Ok(new { message = "Product retrieved successfully", data = product });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Error retrieving product with id {id}");
+                return StatusCode(500, new { message = "Internal server error", details = ex.Message });
+            }
+        }
+
+        // GET: api/Product/product-type/{id}
+        [HttpGet("product-type/{productTypeId}")]
+        public async Task<IActionResult> GetProductsByType(int productTypeId, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
+        {
+            try
+            {
+                var (products, totalPages, totalItems) = await _productService.GetProductsByTypeWithPaginationAsync(productTypeId, pageNumber, pageSize);
+                return Ok(new { 
+                    message = "Products retrieved successfully", 
+                    data = products,
+                    pagination = new {
+                        currentPage = pageNumber,
+                        pageSize = pageSize,
+                        totalPages = totalPages,
+                        totalItems = totalItems
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error retrieving products for type {productTypeId}");
+                return StatusCode(500, new { message = "Internal server error", details = ex.Message });
+            }
+        }
+
+        // GET: api/Product/branch/{id}
+        [HttpGet("branch/{branchId}")]
+        public async Task<IActionResult> GetProductsByBranch(int branchId, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
+        {
+            try
+            {
+                var (products, totalPages, totalItems) = await _productService.GetProductsByBranchWithPaginationAsync(branchId, pageNumber, pageSize);
+                return Ok(new { 
+                    message = "Products retrieved successfully", 
+                    data = products,
+                    pagination = new {
+                        currentPage = pageNumber,
+                        pageSize = pageSize,
+                        totalPages = totalPages,
+                        totalItems = totalItems
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error retrieving products for branch {branchId}");
                 return StatusCode(500, new { message = "Internal server error", details = ex.Message });
             }
         }
@@ -106,31 +170,39 @@ namespace Skincare.API.Controllers
         {
             try
             {
+                _logger.LogInformation($"Received search request with keyword: '{keyword}'");
+                
                 if (string.IsNullOrWhiteSpace(keyword))
                 {
+                    _logger.LogWarning("Empty search keyword provided");
                     return Ok(new { message = "No search term provided", data = new List<ProductDto>() });
                 }
                 
-                string cacheKey = $"ProductSearch_{keyword}";
+                // Trim and ensure proper encoding for Vietnamese characters
+                string processedKeyword = keyword.Trim();
+                _logger.LogInformation($"Processing search with keyword: '{processedKeyword}'");
+
+                var products = await _productService.SearchProductsAsync(processedKeyword);
+                _logger.LogInformation($"Search completed, found {products.Count()} products");
                 
-                // Kiểm tra dữ liệu trong cache
-                if (_cache.TryGetValue(cacheKey, out object cachedResponse))
+                // Process images to ensure they are formatted correctly
+                foreach (var product in products)
                 {
-                    _logger.LogInformation($"Returning cached search results for '{keyword}'");
-                    return Ok(cachedResponse);
+                    if (!string.IsNullOrEmpty(product.Image))
+                    {
+                        if (!product.Image.StartsWith("/"))
+                        {
+                            product.Image = "/" + product.Image;
+                            _logger.LogDebug($"Formatted image path for product {product.Id}: {product.Image}");
+                        }
+                    }
                 }
                 
-                var products = await _productService.SearchProductsAsync(keyword);
-                var response = new { message = "Products searched successfully", data = products };
-                
-                // Lưu vào cache với thời gian ngắn hơn
-                _cache.Set(cacheKey, response, TimeSpan.FromMinutes(1));
-                
-                return Ok(response);
+                return Ok(new { message = $"Found {products.Count()} products for '{processedKeyword}'", data = products });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error searching products with keyword {keyword}");
+                _logger.LogError(ex, $"Error searching products with keyword '{keyword}'");
                 return StatusCode(500, new { message = "Internal server error", details = ex.Message });
             }
         }
@@ -138,17 +210,12 @@ namespace Skincare.API.Controllers
         // POST: api/Product
         [HttpPost]
         [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> CreateProduct([FromBody] CreateProductDto createProductDto)
+        public async Task<IActionResult> CreateProduct([FromForm] CreateProductDto createProductDto, IFormFile image = null)
         {
             try
             {
-                var product = await _productService.CreateProductAsync(createProductDto);
-                
-                // Xóa cache khi có thay đổi dữ liệu
-                ClearProductCache();
-                
-                return CreatedAtAction(nameof(GetProduct), new { id = product.Id }, 
-                    new { message = "Product created successfully", data = product });
+                var product = await _productService.CreateProductWithImageAsync(createProductDto, image);
+                return CreatedAtAction(nameof(GetProduct), new { id = product.Id }, new { message = "Product created successfully", data = product });
             }
             catch (Exception ex)
             {
@@ -157,30 +224,46 @@ namespace Skincare.API.Controllers
             }
         }
 
-        // PUT: api/Product/5
-        [HttpPut("{id}")]
+        [HttpPut]
+        [Route("{id:int}")]
         [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> UpdateProduct(int id, [FromBody] UpdateProductDto updateProductDto)
+        public async Task<IActionResult> UpdateProductAsync(int id, [FromBody] UpdateProductDto product)
         {
+            _logger.LogInformation($"Updating product with id: {id}");
+            if (product == null)
+            {
+                _logger.LogWarning("Update product failed: Product is null");
+                return BadRequest(new { success = false, message = "Product cannot be null" });
+            }
+
             try
             {
-                var product = await _productService.UpdateProductAsync(id, updateProductDto);
-                
-                // Xóa cache khi có thay đổi dữ liệu
-                ClearProductCache();
-                _cache.Remove($"Product_{id}");
-                
-                return Ok(new { message = "Product updated successfully", data = product });
-            }
-            catch (NotFoundException nfex)
-            {
-                _logger.LogWarning(nfex, "Product not found for update");
-                return NotFound(new { message = nfex.Message, errorCode = "PRODUCT_NOT_FOUND" });
+                var result = await _productService.UpdateProductAsync(id, product);
+                return Ok(new { success = true, message = "Update product successfully", data = result });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error updating product with id {id}");
-                return StatusCode(500, new { message = "Internal server error", details = ex.Message });
+                _logger.LogError(ex, $"Error updating product with id: {id}");
+                return StatusCode(500, new { success = false, message = "Error updating product: " + ex.Message });
+            }
+        }
+
+        [HttpPost("upload-product-image")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> UploadProductImage([FromForm] IFormFile image)
+        {
+            if (image == null || image.Length == 0)
+                return BadRequest(new { message = "No image provided" });
+
+            try
+            {
+                var filePath = await _fileService.SaveFileAsync(image, "product-images");
+                return Ok(new { imageUrl = filePath });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error uploading product image");
+                return StatusCode(500, "Internal server error");
             }
         }
 
@@ -192,11 +275,6 @@ namespace Skincare.API.Controllers
             try
             {
                 await _productService.DeleteProductAsync(id);
-                
-                // Xóa cache khi có thay đổi dữ liệu
-                ClearProductCache();
-                _cache.Remove($"Product_{id}");
-                
                 return Ok(new { message = $"Product with ID {id} deleted successfully" });
             }
             catch (NotFoundException nfex)
@@ -211,131 +289,121 @@ namespace Skincare.API.Controllers
             }
         }
 
-        // POST: api/Product/with-image
-        [HttpPost("with-image")]
-        [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> CreateProductWithImage([FromForm] string name, [FromForm] string description,
-            [FromForm] decimal price, [FromForm] bool isAvailable, [FromForm] int productTypeId, 
-            [FromForm] int productBrandId, IFormFile image)
+        // GET: api/Product/skin-type/{skinTypeId}
+        [HttpGet("skin-type/{skinTypeId}")]
+        public async Task<IActionResult> GetProductsBySkinType(int skinTypeId, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
         {
             try
             {
-                if (image == null || image.Length == 0)
-                    return BadRequest(new { message = "No image uploaded" });
-
-                var createProductDto = new CreateProductDto
-                {
-                    Name = name,
-                    Description = description,
-                    Price = price,
-                    IsAvailable = isAvailable,
-                    ProductTypeId = productTypeId,
-                    ProductBrandId = productBrandId
-                };
-
-                var product = await _productService.CreateProductWithImageAsync(createProductDto, image);
-                
-                // Xóa cache khi có thay đổi dữ liệu
-                ClearProductCache();
-                
-                return CreatedAtAction(nameof(GetProduct), new { id = product.Id }, 
-                    new { message = "Product created successfully with image", data = product });
-            }
-            catch (ArgumentException argEx)
-            {
-                _logger.LogWarning(argEx, "Invalid argument for product creation");
-                return BadRequest(new { message = argEx.Message });
+                var (products, totalPages, totalItems) = await _productService.GetProductsBySkinTypeWithPaginationAsync(skinTypeId, pageNumber, pageSize);
+                return Ok(new { 
+                    message = "Products retrieved successfully", 
+                    data = products,
+                    pagination = new {
+                        currentPage = pageNumber,
+                        pageSize = pageSize,
+                        totalPages = totalPages,
+                        totalItems = totalItems
+                    }
+                });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error creating product with image");
+                _logger.LogError(ex, $"Error retrieving products for skin type {skinTypeId}");
                 return StatusCode(500, new { message = "Internal server error", details = ex.Message });
             }
         }
 
-        // PUT: api/Product/5/with-image
-        [HttpPut("{id}/with-image")]
-        [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> UpdateProductWithImage(int id, [FromForm] string name, 
-            [FromForm] string description, [FromForm] decimal? price, [FromForm] bool? isAvailable, 
-            [FromForm] int? productTypeId, [FromForm] int? productBrandId, IFormFile image)
+        // GET: api/Product/test
+        [HttpGet("test")]
+        public IActionResult Test()
         {
             try
             {
-                var updateProductDto = new UpdateProductDto
-                {
-                    Name = name,
-                    Description = description,
-                    Price = price,
-                    IsAvailable = isAvailable,
-                    ProductTypeId = productTypeId,
-                    ProductBrandId = productBrandId
-                };
-
-                var product = await _productService.UpdateProductWithImageAsync(id, updateProductDto, image);
-                
-                // Xóa cache khi có thay đổi dữ liệu
-                ClearProductCache();
-                _cache.Remove($"Product_{id}");
-                
-                return Ok(new { message = "Product updated successfully with image", data = product });
-            }
-            catch (NotFoundException nfex)
-            {
-                _logger.LogWarning(nfex, "Product not found for update with image");
-                return NotFound(new { message = nfex.Message, errorCode = "PRODUCT_NOT_FOUND" });
-            }
-            catch (ArgumentException argEx)
-            {
-                _logger.LogWarning(argEx, "Invalid argument for product update");
-                return BadRequest(new { message = argEx.Message });
+                _logger.LogInformation("Test endpoint called");
+                return Ok(new { message = "API is working", timestamp = DateTime.UtcNow });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error updating product with image for id {id}");
-                return StatusCode(500, new { message = "Internal server error", details = ex.Message });
+                _logger.LogError(ex, "Error in test endpoint");
+                return StatusCode(500, new { message = "Error in test endpoint", error = ex.Message });
             }
         }
         
-        // Helper method to clear product cache
-        private void ClearProductCache()
+        // POST: api/Product/compare
+        [HttpPost("compare")]
+        public async Task<IActionResult> CompareProducts([FromBody] CompareRequestDto compareRequestDto)
         {
-            // Clear all product-related cache entries
-            // Thực tế nên dùng pattern hoặc tag để quản lý cache hiệu quả hơn
-            foreach (var key in _cache.GetKeys<string>())
+            try
             {
-                if (key.StartsWith("Product_") || key.StartsWith("Products_"))
+                if (compareRequestDto == null || compareRequestDto.ProductIds == null || compareRequestDto.ProductIds.Count == 0)
                 {
-                    _cache.Remove(key);
+                    return BadRequest(new { message = "No products selected for comparison" });
                 }
+                
+                if (compareRequestDto.ProductIds.Count > 4)
+                {
+                    return BadRequest(new { message = "Maximum 4 products allowed for comparison" });
+                }
+                
+                _logger.LogInformation($"Comparing products with IDs: {string.Join(", ", compareRequestDto.ProductIds)}");
+                
+                var products = await _productService.CompareProductsAsync(compareRequestDto);
+                
+                // Process images to ensure they are formatted correctly
+                foreach (var product in products)
+                {
+                    if (!string.IsNullOrEmpty(product.Image))
+                    {
+                        if (!product.Image.StartsWith("/"))
+                        {
+                            product.Image = "/" + product.Image;
+                        }
+                    }
+                }
+                
+                return Ok(new { 
+                    message = "Products compared successfully", 
+                    data = products 
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error comparing products");
+                return StatusCode(500, new { message = "Internal server error", details = ex.Message });
             }
         }
     }
-    
+
+    internal class _fileService
+    {
+    }
+
     // Extension method to get all keys from IMemoryCache
+
     public static class MemoryCacheExtensions
     {
         private static readonly Lazy<object> _keys = new Lazy<object>(() => { return new object(); });
         private static readonly Dictionary<object, HashSet<string>> _keysCollection = new Dictionary<object, HashSet<string>>();
- 
+
         public static HashSet<string> GetKeys<T>(this IMemoryCache memoryCache)
         {
             var keys = _keysCollection.GetOrAdd(_keys.Value, _ => new HashSet<string>());
             return keys;
         }
- 
+
         public static void AddKey(this IMemoryCache memoryCache, string key)
         {
             var keys = _keysCollection.GetOrAdd(_keys.Value, _ => new HashSet<string>());
             keys.Add(key);
         }
- 
+
         public static void RemoveKey(this IMemoryCache memoryCache, string key)
         {
             var keys = _keysCollection.GetOrAdd(_keys.Value, _ => new HashSet<string>());
             keys.Remove(key);
         }
-        
+
         private static TValue GetOrAdd<TKey, TValue>(this Dictionary<TKey, TValue> dict, TKey key, Func<TKey, TValue> valueFactory)
         {
             if (!dict.TryGetValue(key, out var value))

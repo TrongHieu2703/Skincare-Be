@@ -81,8 +81,27 @@ namespace Skincare.Services.Implements
                 if (product == null)
                     throw new NotFoundException($"Product with ID {dto.ProductId} not found");
 
-                // Lấy hoặc tạo giỏ hàng cho user
+                // Lấy số lượng hiện có trong giỏ hàng (nếu có)
                 var cart = await _cartRepository.GetCartByUserIdAsync(userId);
+                var existingCartItem = cart.CartItems.FirstOrDefault(ci => ci.ProductId == dto.ProductId);
+                var currentCartQuantity = existingCartItem?.Quantity ?? 0;
+                
+                // Tính tổng số lượng sau khi thêm
+                var totalRequestedQuantity = currentCartQuantity + dto.Quantity;
+                
+                // Kiểm tra tồn kho dựa trên Stock trực tiếp
+                var availableStock = product.Stock ?? 0;
+                _logger.LogInformation($"Validating against product.Stock: {availableStock}, requested: {totalRequestedQuantity}");
+                
+                if (availableStock <= 0)
+                {
+                    throw new InvalidOperationException($"Sản phẩm '{product.Name}' hiện đã hết hàng.");
+                }
+                
+                if (totalRequestedQuantity > availableStock)
+                {
+                    throw new InvalidOperationException($"Không đủ số lượng trong kho. Chỉ còn {availableStock} sản phẩm.");
+                }
 
                 // Thêm sản phẩm vào giỏ hàng
                 var cartItem = new CartItem
@@ -117,6 +136,20 @@ namespace Skincare.Services.Implements
                 var product = await _productRepository.GetProductByIdAsync(dto.ProductId);
                 if (product == null)
                     throw new NotFoundException($"Product with ID {dto.ProductId} not found");
+
+                // Kiểm tra tồn kho dựa trên Stock trực tiếp
+                var availableStock = product.Stock ?? 0;
+                _logger.LogInformation($"Validating against product.Stock: {availableStock}, requested: {dto.Quantity}");
+                
+                if (availableStock <= 0)
+                {
+                    throw new InvalidOperationException($"Sản phẩm '{product.Name}' hiện đã hết hàng.");
+                }
+                
+                if (dto.Quantity > availableStock)
+                {
+                    throw new InvalidOperationException($"Không đủ số lượng trong kho. Chỉ còn {availableStock} sản phẩm.");
+                }
 
                 // Cập nhật số lượng sản phẩm
                 var cartItem = new CartItem
@@ -225,7 +258,7 @@ namespace Skincare.Services.Implements
                 if (cartItem == null)
                     throw new NotFoundException($"Cart item with ID {id} not found");
 
-                return new CartItemDTO
+                var cartItemDto = new CartItemDTO
                 {
                     Id = cartItem.Id,
                     CartId = cartItem.CartId ?? 0,
@@ -235,6 +268,23 @@ namespace Skincare.Services.Implements
                     ProductImage = cartItem.Product?.Image,
                     ProductPrice = cartItem.Product?.Price ?? 0
                 };
+
+                // Gán ProductStock thông qua phản chiếu để tránh lỗi MissingMethodException
+                try
+                {
+                    var property = typeof(CartItemDTO).GetProperty("ProductStock");
+                    if (property != null)
+                    {
+                        property.SetValue(cartItemDto, cartItem.Product?.Stock);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Bỏ qua lỗi nếu không tìm thấy property
+                    _logger.LogWarning(ex, "Could not set ProductStock property - ignored");
+                }
+
+                return cartItemDto;
             }
             catch (Exception ex)
             {
@@ -247,6 +297,32 @@ namespace Skincare.Services.Implements
         {
             try
             {
+                // Lấy thông tin cart item
+                var cartItem = await _cartItemRepository.GetCartItemByIdAsync(cartItemId);
+                if (cartItem == null)
+                    throw new NotFoundException($"Cart item with ID {cartItemId} not found");
+                
+                // Lấy thông tin sản phẩm
+                var product = await _productRepository.GetProductByIdAsync(cartItem.ProductId ?? 0);
+                if (product == null)
+                    throw new NotFoundException($"Product with ID {cartItem.ProductId} not found");
+                
+                // Kiểm tra tồn kho dựa trên Stock trực tiếp
+                var availableStock = product.Stock ?? 0;
+                _logger.LogInformation($"Validating against product.Stock: {availableStock}, requested: {quantity}");
+                
+                if (availableStock <= 0)
+                {
+                    throw new InvalidOperationException($"Sản phẩm '{product.Name}' hiện đã hết hàng.");
+                }
+                
+                // Cho phép cập nhật với số lượng tối đa bằng stock
+                if (quantity > availableStock)
+                {
+                    throw new InvalidOperationException($"Không đủ số lượng trong kho. Chỉ còn {availableStock} sản phẩm.");
+                }
+                
+                // Cập nhật số lượng
                 return await _cartItemRepository.UpdateCartItemAsync(cartItemId, quantity);
             }
             catch (Exception ex)
@@ -269,7 +345,7 @@ namespace Skincare.Services.Implements
                     var quantity = item.Quantity ?? 0;
                     totalPrice += price * quantity;
 
-                    cartItemDtos.Add(new CartItemDTO
+                    var cartItemDto = new CartItemDTO
                     {
                         Id = item.Id,
                         CartId = item.CartId ?? 0,
@@ -278,7 +354,24 @@ namespace Skincare.Services.Implements
                         ProductName = item.Product?.Name ?? "Unknown Product",
                         ProductImage = item.Product?.Image,
                         ProductPrice = price
-                    });
+                    };
+
+                    // Gán ProductStock thông qua phản chiếu để tránh lỗi MissingMethodException
+                    try
+                    {
+                        var property = typeof(CartItemDTO).GetProperty("ProductStock");
+                        if (property != null)
+                        {
+                            property.SetValue(cartItemDto, item.Product?.Stock);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // Bỏ qua lỗi nếu không tìm thấy property
+                        _logger.LogWarning(ex, "Could not set ProductStock property - ignored");
+                    }
+
+                    cartItemDtos.Add(cartItemDto);
                 }
             }
 

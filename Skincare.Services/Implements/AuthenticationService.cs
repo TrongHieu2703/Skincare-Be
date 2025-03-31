@@ -1,9 +1,9 @@
-﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using Skincare.BusinessObjects.DTOs;
 using Skincare.BusinessObjects.Entities;
-using Skincare.BusinessObjects.Exceptions; // <-- import custom exceptions
+using Skincare.BusinessObjects.Exceptions;
 using Skincare.Repositories.Interfaces;
 using Skincare.Services.Interfaces;
 using System;
@@ -20,45 +20,52 @@ namespace Skincare.Services.Implements
         private readonly IAccountRepository _accountRepository;
         private readonly ILogger<AuthenticationService> _logger;
         private readonly IConfiguration _configuration;
-        private readonly GoogleDriveService _googleDriveService;
+        private readonly FileService _fileService;
 
         public AuthenticationService(
             IAccountRepository accountRepository,
             ILogger<AuthenticationService> logger,
             IConfiguration configuration,
-            GoogleDriveService googleDriveService)
+            FileService fileService)
         {
             _accountRepository = accountRepository;
             _logger = logger;
             _configuration = configuration;
-            _googleDriveService = googleDriveService;
+            _fileService = fileService;
         }
 
         public async Task<LoginResponse> LoginAsync(LoginRequest loginRequest)
         {
             try
             {
+                _logger.LogInformation("Login attempt for {Email}", loginRequest.Email);
                 var account = await _accountRepository.GetByEmailAsync(loginRequest.Email);
-                // Giữ nguyên logic trả về null -> Unauthorized
                 if (account == null || !BCrypt.Net.BCrypt.Verify(loginRequest.Password, account.PasswordHash))
                 {
                     _logger.LogWarning("Invalid login attempt for {Email}", loginRequest.Email);
-                    return null; // Controller sẽ trả 401
+                    return null;
                 }
 
                 var token = GenerateJwtToken(account);
+                _logger.LogInformation("Login successful for {Email}, userId: {UserId}", loginRequest.Email, account.Id);
+
                 return new LoginResponse
                 {
                     Token = token,
                     Role = account.Role,
                     Username = account.Username,
-                    Expiration = DateTime.UtcNow.AddHours(2),
-                    Message = "Login successful"
+                    Expiration = DateTime.UtcNow.AddHours(24),
+                    Message = "Login successful",
+                    Id = account.Id,
+                    Email = account.Email,
+                    Avatar = account.Avatar,
+                    PhoneNumber = account.PhoneNumber,
+                    Address = account.Address
                 };
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Login failed");
+                _logger.LogError(ex, "Login failed for {Email}", loginRequest.Email);
                 throw;
             }
         }
@@ -67,12 +74,19 @@ namespace Skincare.Services.Implements
         {
             try
             {
-                // Kiểm tra email tồn tại
                 var existingAccount = await _accountRepository.GetByEmailAsync(registerRequest.Email);
                 if (existingAccount != null)
                 {
-                    // Thay vì return null, quăng DuplicateEmailException
                     throw new DuplicateEmailException($"Email {registerRequest.Email} already exists.");
+                }
+
+                if (!string.IsNullOrEmpty(registerRequest.PhoneNumber))
+                {
+                    var existingPhoneAccount = await _accountRepository.GetByPhoneNumberAsync(registerRequest.PhoneNumber);
+                    if (existingPhoneAccount != null)
+                    {
+                        throw new DuplicatePhoneNumberException($"Phone number {registerRequest.PhoneNumber} already exists.");
+                    }
                 }
 
                 var passwordHash = BCrypt.Net.BCrypt.HashPassword(registerRequest.Password);
@@ -93,18 +107,25 @@ namespace Skincare.Services.Implements
                 await _accountRepository.CreateAccountAsync(newAccount);
                 var token = GenerateJwtToken(newAccount);
 
+                _logger.LogInformation("Registration successful for {Email}, userId: {UserId}", newAccount.Email, newAccount.Id);
+
                 return new LoginResponse
                 {
                     Token = token,
                     Role = newAccount.Role,
                     Username = newAccount.Username,
-                    Expiration = DateTime.UtcNow.AddHours(2),
-                    Message = "Registration successful"
+                    Expiration = DateTime.UtcNow.AddHours(24),
+                    Message = "Registration successful",
+                    Id = newAccount.Id,
+                    Email = newAccount.Email,
+                    Avatar = newAccount.Avatar,
+                    PhoneNumber = newAccount.PhoneNumber,
+                    Address = newAccount.Address
                 };
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Registration failed");
+                _logger.LogError(ex, "Registration failed for {Email}", registerRequest.Email);
                 throw;
             }
         }
@@ -133,25 +154,23 @@ namespace Skincare.Services.Implements
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
-        public async Task<string> UploadAvatarForRegistration(IFormFile avatar)
+        public async Task<string?> UploadAvatarForRegistration(IFormFile? avatar)
         {
             try
             {
-                // Validate file
                 if (avatar == null || avatar.Length == 0)
                 {
-                    throw new ArgumentException("No avatar file uploaded");
+                    // No avatar to upload, return null
+                    return null;
                 }
 
-                // Validate file type
                 var allowedTypes = new[] { "image/jpeg", "image/jpg", "image/png", "image/gif" };
                 if (!allowedTypes.Contains(avatar.ContentType.ToLower()))
                 {
                     throw new ArgumentException("Invalid file type. Only jpg, jpeg, png and gif are allowed.");
                 }
 
-                // Sử dụng _googleDriveService đã tiêm thay vì tạo mới
-                var (fileId, _, _, fileUrl) = await _googleDriveService.UploadFile(avatar);
+                var fileUrl = await _fileService.SaveFileAsync(avatar, "avatar-images");
                 
                 return fileUrl;
             }
