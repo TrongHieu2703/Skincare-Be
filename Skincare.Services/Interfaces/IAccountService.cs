@@ -1,4 +1,4 @@
-﻿using Skincare.BusinessObjects.DTOs;
+using Skincare.BusinessObjects.DTOs;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
