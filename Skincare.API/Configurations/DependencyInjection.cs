@@ -18,14 +18,11 @@ namespace Skincare.API.Configurations
             services.AddScoped<IAuthenticationService, AuthenticationService>();
             services.AddScoped<IInventoryService, InventoryService>();
             services.AddScoped<ICartService, CartService>();
-            services.AddScoped<IFaqService, FaqService>();
             services.AddScoped<IVoucherService, VoucherService>();
             services.AddScoped<ITransactionService, TransactionService>();
-            services.AddScoped<IBlogService, BlogService>();
             services.AddScoped<IFileService, FileService>();
             services.AddScoped<IProductTypeService, ProductTypeService>();
             services.AddScoped<ISkinTypeService, SkinTypeService>();
-            services.AddScoped<IEmailService, EmailService>();
             services.AddScoped<IBranchService, BranchService>();
             services.AddScoped<IDashboardService, DashboardService>();
             // Register Repositories
@@ -36,10 +33,8 @@ namespace Skincare.API.Configurations
             services.AddScoped<IAuthenticationRepository, AuthenticationRepository>();
             services.AddScoped<IInventoryRepository, InventoryRepository>();
             services.AddScoped<ICartRepository, CartRepository>();
-            services.AddScoped<IFaqRepository, FaqRepository>();
             services.AddScoped<IVoucherRepository, VoucherRepository>();
             services.AddScoped<ITransactionRepository, TransactionRepository>();
-            services.AddScoped<IBlogRepository, BlogRepository>();
             services.AddScoped<ICartItemRepository, CartItemRepository>();
             services.AddScoped<IProductSkinTypeRepository, ProductSkinTypeRepository>();
             services.AddScoped<ISkinTypeRepository, SkinTypeRepository>();
