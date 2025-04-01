@@ -7,111 +7,170 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-public class ReviewRepository : IReviewRepository
+namespace Skincare.Repositories.Implements
 {
-    private readonly SWP391Context _context;
-
-    public ReviewRepository(SWP391Context context)
+    public class ReviewRepository : IReviewRepository
     {
-        _context = context;
-    }
+        private readonly SWP391Context _context;
 
-    // GET reviews by product
-    public async Task<IEnumerable<ReviewDto>> GetReviewsByProductIdAsync(int productId)
-    {
-        var reviews = await _context.Reviews
-            .Where(r => r.ProductId == productId)
-            .ToListAsync();
-
-        return reviews.Select(r => new ReviewDto
+        public ReviewRepository(SWP391Context context)
         {
-            Id = r.Id,
-            OrderDetailId = r.OrderDetailId,
-            CustomerId = r.CustomerId,
-            ProductId = r.ProductId,
-            Rating = r.Rating,
-            Comment = r.Comment,
-            CreatedAt = r.CreatedAt
-        });
-    }
+            _context = context;
+        }
 
-    // GET review by id
-    public async Task<ReviewDto> GetReviewByIdAsync(int id)
-    {
-        var review = await _context.Reviews.FindAsync(id);
-        if (review == null) return null;
-
-        return new ReviewDto
+        // GET reviews by product
+        public async Task<IEnumerable<ReviewDto>> GetReviewsByProductIdAsync(int productId)
         {
-            Id = review.Id,
-            OrderDetailId = review.OrderDetailId,
-            CustomerId = review.CustomerId,
-            ProductId = review.ProductId,
-            Rating = review.Rating,
-            Comment = review.Comment,
-            CreatedAt = review.CreatedAt
-        };
-    }
+            var reviews = await _context.Reviews
+                .Where(r => r.ProductId == productId)
+                .ToListAsync();
 
-    // CREATE review
-    public async Task<ReviewDto> CreateReviewAsync(CreateReviewDto createReviewDto)
-    {
-        var review = new Review
+            return reviews.Select(r => new ReviewDto
+            {
+                Id = r.Id,
+                OrderDetailId = r.OrderDetailId,
+                CustomerId = r.CustomerId,
+                ProductId = r.ProductId,
+                Rating = r.Rating,
+                Comment = r.Comment,
+                CreatedAt = r.CreatedAt
+            });
+        }
+
+        // GET review by id
+        public async Task<ReviewDto> GetReviewByIdAsync(int id)
         {
-            OrderDetailId = createReviewDto.OrderDetailId,
-            CustomerId = createReviewDto.CustomerId,
-            ProductId = createReviewDto.ProductId,
-            Rating = createReviewDto.Rating,
-            Comment = createReviewDto.Comment,
-            CreatedAt = System.DateTime.UtcNow
-        };
+            var review = await _context.Reviews.FindAsync(id);
+            if (review == null) return null;
 
-        _context.Reviews.Add(review);
-        await _context.SaveChangesAsync();
+            return new ReviewDto
+            {
+                Id = review.Id,
+                OrderDetailId = review.OrderDetailId,
+                CustomerId = review.CustomerId,
+                ProductId = review.ProductId,
+                Rating = review.Rating,
+                Comment = review.Comment,
+                CreatedAt = review.CreatedAt
+            };
+        }
 
-        return new ReviewDto
+        // CREATE review
+        public async Task<ReviewDto> CreateReviewAsync(CreateReviewDto createReviewDto)
         {
-            Id = review.Id,
-            OrderDetailId = review.OrderDetailId,
-            CustomerId = review.CustomerId,
-            ProductId = review.ProductId,
-            Rating = review.Rating,
-            Comment = review.Comment,
-            CreatedAt = review.CreatedAt
-        };
-    }
+            var review = new Review
+            {
+                OrderDetailId = createReviewDto.OrderDetailId,
+                CustomerId = createReviewDto.CustomerId,
+                ProductId = createReviewDto.ProductId,
+                Rating = createReviewDto.Rating,
+                Comment = createReviewDto.Comment,
+                CreatedAt = System.DateTime.UtcNow
+            };
 
-    // UPDATE review
-    public async Task<ReviewDto> UpdateReviewAsync(int id, UpdateReviewDto updateReviewDto)
-    {
-        var review = await _context.Reviews.FindAsync(id);
-        if (review == null) return null;
-
-        review.Rating = updateReviewDto.Rating ?? review.Rating;
-        review.Comment = updateReviewDto.Comment ?? review.Comment;
-
-        await _context.SaveChangesAsync();
-
-        return new ReviewDto
-        {
-            Id = review.Id,
-            OrderDetailId = review.OrderDetailId,
-            CustomerId = review.CustomerId,
-            ProductId = review.ProductId,
-            Rating = review.Rating,
-            Comment = review.Comment,
-            CreatedAt = review.CreatedAt
-        };
-    }
-
-    // DELETE review
-    public async Task DeleteReviewAsync(int id)
-    {
-        var review = await _context.Reviews.FindAsync(id);
-        if (review != null)
-        {
-            _context.Reviews.Remove(review);
+            _context.Reviews.Add(review);
             await _context.SaveChangesAsync();
+
+            return new ReviewDto
+            {
+                Id = review.Id,
+                OrderDetailId = review.OrderDetailId,
+                CustomerId = review.CustomerId,
+                ProductId = review.ProductId,
+                Rating = review.Rating,
+                Comment = review.Comment,
+                CreatedAt = review.CreatedAt
+            };
+        }
+
+        // UPDATE review
+        public async Task<ReviewDto> UpdateReviewAsync(int id, UpdateReviewDto updateReviewDto)
+        {
+            var review = await _context.Reviews.FindAsync(id);
+            if (review == null) return null;
+
+            review.Rating = updateReviewDto.Rating ?? review.Rating;
+            review.Comment = updateReviewDto.Comment ?? review.Comment;
+
+            await _context.SaveChangesAsync();
+
+            return new ReviewDto
+            {
+                Id = review.Id,
+                OrderDetailId = review.OrderDetailId,
+                CustomerId = review.CustomerId,
+                ProductId = review.ProductId,
+                Rating = review.Rating,
+                Comment = review.Comment,
+                CreatedAt = review.CreatedAt
+            };
+        }
+
+        // DELETE review
+        public async Task DeleteReviewAsync(int id)
+        {
+            var review = await _context.Reviews.FindAsync(id);
+            if (review != null)
+            {
+                _context.Reviews.Remove(review);
+                await _context.SaveChangesAsync();
+            }
+        }
+        
+        // Check if order item exists
+        public async Task<bool> OrderItemExistsAsync(int orderItemId)
+        {
+            return await _context.OrderItems.AnyAsync(oi => oi.Id == orderItemId);
+        }
+        
+        // Get order item with its order for status validation
+        public async Task<OrderItem> GetOrderItemWithOrderAsync(int orderItemId)
+        {
+            return await _context.OrderItems
+                .Include(oi => oi.Order)
+                .FirstOrDefaultAsync(oi => oi.Id == orderItemId);
+        }
+        
+        // Check if a review already exists
+        public async Task<bool> ReviewExistsAsync(int orderItemId, int customerId, int productId)
+        {
+            return await _context.Reviews.AnyAsync(r => 
+                r.OrderDetailId == orderItemId && 
+                r.CustomerId == customerId && 
+                r.ProductId == productId);
+        }
+        
+        // Check if product exists
+        public async Task<bool> ProductExistsAsync(int productId)
+        {
+            return await _context.Products.AnyAsync(p => p.Id == productId);
+        }
+        
+        // Get customer by ID
+        public async Task<Account> GetCustomerAsync(int customerId)
+        {
+            return await _context.Accounts.FindAsync(customerId);
+        }
+
+        // Add this new method to check if a review exists for a specific order item
+        public async Task<ReviewDto> GetReviewByOrderItemAsync(int orderItemId, int customerId)
+        {
+            var review = await _context.Reviews
+                .Where(r => r.OrderDetailId == orderItemId && r.CustomerId == customerId)
+                .FirstOrDefaultAsync();
+            
+            if (review == null) return null;
+            
+            return new ReviewDto
+            {
+                Id = review.Id,
+                OrderDetailId = review.OrderDetailId,
+                CustomerId = review.CustomerId,
+                ProductId = review.ProductId,
+                Rating = review.Rating,
+                Comment = review.Comment,
+                CreatedAt = review.CreatedAt
+            };
         }
     }
 }

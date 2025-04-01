@@ -93,6 +93,11 @@ namespace Skincare.API.Controllers
                 var createdCart = await _cartService.AddCartAsync(dto, userId);
                 return CreatedAtAction(nameof(GetCartById), new { id = createdCart.CartId }, new { message = "Cart added successfully", data = createdCart });
             }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning(ex, "Inventory validation failed");
+                return BadRequest(new { message = ex.Message, errorCode = "INSUFFICIENT_INVENTORY" });
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error adding cart");
@@ -113,6 +118,11 @@ namespace Skincare.API.Controllers
             {
                 var updatedCart = await _cartService.UpdateCartAsync(dto);
                 return Ok(new { message = "Cart updated successfully", data = updatedCart });
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning(ex, "Inventory validation failed");
+                return BadRequest(new { message = ex.Message, errorCode = "INSUFFICIENT_INVENTORY" });
             }
             catch (NotFoundException nfex)
             {

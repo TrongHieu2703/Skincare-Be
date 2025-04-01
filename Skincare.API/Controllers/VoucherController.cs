@@ -4,6 +4,8 @@ using Skincare.BusinessObjects.Exceptions;
 using Skincare.Services.Interfaces;
 using System;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using System.Linq;
 
 namespace Skincare.API.Controllers
 {
@@ -32,7 +34,7 @@ namespace Skincare.API.Controllers
             }
         }
 
-        [HttpGet("{id}")]
+        [HttpGet("{id:int}")]
         public async Task<IActionResult> GetVoucherById(int id)
         {
             try
@@ -51,6 +53,7 @@ namespace Skincare.API.Controllers
         }
 
         [HttpPost]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> CreateVoucher([FromBody] CreateVoucherDto createVoucherDto)
         {
             if (createVoucherDto == null)
@@ -69,6 +72,7 @@ namespace Skincare.API.Controllers
         }
 
         [HttpPut("{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> UpdateVoucher(int id, [FromBody] UpdateVoucherDto updateVoucherDto)
         {
             if (updateVoucherDto == null)
@@ -89,6 +93,7 @@ namespace Skincare.API.Controllers
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteVoucher(int id)
         {
             try
@@ -102,6 +107,35 @@ namespace Skincare.API.Controllers
             }
             catch (Exception ex)
             {
+                return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+            }
+        }
+
+        [HttpGet("available")]
+        [Route("api/[controller]/available")]
+        public async Task<IActionResult> GetAvailableVouchers()
+        {
+            try
+            {
+                var vouchers = await _voucherService.GetAvailableVouchersAsync();
+                
+                // Debug: Log information about shipping vouchers
+                var shippingVouchers = vouchers.Where(v => !v.IsPercent && v.Value == 0).ToList();
+                Console.WriteLine($"Number of shipping vouchers found: {shippingVouchers.Count}");
+                
+                foreach (var voucher in shippingVouchers)
+                {
+                    Console.WriteLine($"Shipping Voucher ID: {voucher.VoucherId}, Name: {voucher.Name}, Code: {voucher.Code}");
+                    Console.WriteLine($"  IsPercent: {voucher.IsPercent}, Value: {voucher.Value}");
+                    Console.WriteLine($"  StartedAt: {voucher.StartedAt:yyyy-MM-dd}, ExpiredAt: {voucher.ExpiredAt:yyyy-MM-dd}");
+                    Console.WriteLine($"  Quantity: {voucher.Quantity}, IsInfinity: {voucher.IsInfinity}");
+                }
+                
+                return Ok(new { message = "Fetched available vouchers successfully", data = vouchers });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in GetAvailableVouchers: {ex.Message}");
                 return StatusCode(500, new { message = "Internal server error", error = ex.Message });
             }
         }

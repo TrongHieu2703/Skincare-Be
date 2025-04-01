@@ -11,5 +11,6 @@ namespace Skincare.Services.Interfaces
         Task<VoucherDto> CreateVoucherAsync(CreateVoucherDto createVoucherDto);
         Task<VoucherDto> UpdateVoucherAsync(int id, UpdateVoucherDto updateVoucherDto);
         Task DeleteVoucherAsync(int id);
+        Task<IEnumerable<VoucherDto>> GetAvailableVouchersAsync();
     }
 }
