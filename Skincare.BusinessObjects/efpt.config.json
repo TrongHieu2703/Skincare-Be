@@ -19,14 +19,6 @@
          "ObjectType": 0
       },
       {
-         "Name": "[dbo].[BlogCategory]",
-         "ObjectType": 0
-      },
-      {
-         "Name": "[dbo].[BlogPost]",
-         "ObjectType": 0
-      },
-      {
          "Name": "[dbo].[Branch]",
          "ObjectType": 0
       },
@@ -36,14 +28,6 @@
       },
       {
          "Name": "[dbo].[CartItem]",
-         "ObjectType": 0
-      },
-      {
-         "Name": "[dbo].[CustomerTest]",
-         "ObjectType": 0
-      },
-      {
-         "Name": "[dbo].[FAQ]",
          "ObjectType": 0
       },
       {
@@ -71,19 +55,7 @@
          "ObjectType": 0
       },
       {
-         "Name": "[dbo].[Quiz]",
-         "ObjectType": 0
-      },
-      {
-         "Name": "[dbo].[QuizAnswer]",
-         "ObjectType": 0
-      },
-      {
          "Name": "[dbo].[Review]",
-         "ObjectType": 0
-      },
-      {
-         "Name": "[dbo].[SkinCareRoutine]",
          "ObjectType": 0
       },
       {
@@ -104,6 +76,7 @@
    "UseAsyncStoredProcedureCalls": true,
    "UseBoolPropertiesWithoutDefaultSql": false,
    "UseDatabaseNames": false,
+   "UseDatabaseNamesForRoutines": true,
    "UseDateOnlyTimeOnly": true,
    "UseDbContextSplitting": false,
    "UseDecimalDataAnnotationForSprocResult": true,
@@ -111,6 +84,7 @@
    "UseHandleBars": false,
    "UseHierarchyId": false,
    "UseInflector": true,
+   "UseInternalAccessModifiersForSprocsAndFunctions": false,
    "UseLegacyPluralizer": false,
    "UseManyToManyEntity": false,
    "UseNoDefaultConstructor": false,
@@ -122,5 +96,6 @@
    "UseSchemaFolders": false,
    "UseSchemaNamespaces": false,
    "UseSpatial": false,
-   "UseT4": false
+   "UseT4": false,
+   "UseT4Split": false
 }

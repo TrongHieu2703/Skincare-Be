@@ -133,31 +133,7 @@ namespace Skincare.Repositories.Implements
                     {
                         _context.Reviews.RemoveRange(relatedReviews);
                         _logger.LogInformation($"Removed {relatedReviews.Count()} review(s) for account ID {id}");
-                    }
-
-                    // 2. Xoá các SkinCareRoutine liên quan
-                    var relatedSkinCareRoutines = _context.SkinCareRoutines.Where(s => s.CustomerId == id);
-                    if (relatedSkinCareRoutines.Any())
-                    {
-                        _context.SkinCareRoutines.RemoveRange(relatedSkinCareRoutines);
-                        _logger.LogInformation($"Removed {relatedSkinCareRoutines.Count()} skin care routine(s) for account ID {id}");
-                    }
-
-                    // 3. Xoá các BlogPost liên quan (blog_owner_id = account id)
-                    var relatedBlogPosts = _context.BlogPosts.Where(bp => bp.BlogOwnerId == id);
-                    if (relatedBlogPosts.Any())
-                    {
-                        _context.BlogPosts.RemoveRange(relatedBlogPosts);
-                        _logger.LogInformation($"Removed {relatedBlogPosts.Count()} blog post(s) for account ID {id}");
-                    }
-
-                    // 4. Xoá các CustomerTest liên quan
-                    var relatedCustomerTests = _context.CustomerTests.Where(ct => ct.CustomerId == id);
-                    if (relatedCustomerTests.Any())
-                    {
-                        _context.CustomerTests.RemoveRange(relatedCustomerTests);
-                        _logger.LogInformation($"Removed {relatedCustomerTests.Count()} customer test(s) for account ID {id}");
-                    }
+                    }                   
 
                     // 5. Xoá các Order liên quan và OrderItem của chúng
                     var relatedOrders = _context.Orders.Where(o => o.CustomerId == id).ToList();

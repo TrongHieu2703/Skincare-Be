@@ -14,6 +14,4 @@ public partial class SkinType
     public int Score { get; set; }
 
     public virtual ICollection<ProductSkinType> ProductSkinTypes { get; set; } = new List<ProductSkinType>();
-
-    public virtual ICollection<SkinCareRoutine> SkinCareRoutines { get; set; } = new List<SkinCareRoutine>();
 }
