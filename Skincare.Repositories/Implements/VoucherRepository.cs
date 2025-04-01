@@ -71,8 +71,10 @@ namespace Skincare.Repositories.Implements
                 MinOrderValue = createVoucherDto.MinOrderValue,
                 Value = createVoucherDto.Value,
                 MaxDiscountValue = createVoucherDto.MaxDiscountValue,
-                StartedAt = createVoucherDto.StartedAt,
-                ExpiredAt = createVoucherDto.ExpiredAt,
+                StartedAt = createVoucherDto.StartedAt.Date,
+                ExpiredAt = createVoucherDto.ExpiredAt.HasValue 
+                    ? createVoucherDto.ExpiredAt.Value.Date.AddDays(1).AddSeconds(-1) 
+                    : null,
                 IsInfinity = createVoucherDto.IsInfinity,
                 Quantity = createVoucherDto.Quantity,
                 PointCost = createVoucherDto.PointCost
@@ -110,8 +112,17 @@ namespace Skincare.Repositories.Implements
             voucher.MinOrderValue = updateVoucherDto.MinOrderValue.HasValue ? updateVoucherDto.MinOrderValue.Value : voucher.MinOrderValue;
             voucher.Value = updateVoucherDto.Value.HasValue ? updateVoucherDto.Value.Value : voucher.Value;
             voucher.MaxDiscountValue = updateVoucherDto.MaxDiscountValue.HasValue ? updateVoucherDto.MaxDiscountValue.Value : voucher.MaxDiscountValue;
-            voucher.StartedAt = updateVoucherDto.StartedAt.HasValue ? updateVoucherDto.StartedAt.Value : voucher.StartedAt;
-            voucher.ExpiredAt = updateVoucherDto.ExpiredAt.HasValue ? updateVoucherDto.ExpiredAt.Value : voucher.ExpiredAt;
+            
+            if (updateVoucherDto.StartedAt.HasValue)
+            {
+                voucher.StartedAt = updateVoucherDto.StartedAt.Value.Date;
+            }
+            
+            if (updateVoucherDto.ExpiredAt.HasValue)
+            {
+                voucher.ExpiredAt = updateVoucherDto.ExpiredAt.Value.Date.AddDays(1).AddSeconds(-1);
+            }
+            
             voucher.IsInfinity = updateVoucherDto.IsInfinity.HasValue ? updateVoucherDto.IsInfinity.Value : voucher.IsInfinity;
             voucher.Quantity = updateVoucherDto.Quantity.HasValue ? updateVoucherDto.Quantity.Value : voucher.Quantity;
             voucher.PointCost = updateVoucherDto.PointCost.HasValue ? updateVoucherDto.PointCost.Value : voucher.PointCost;

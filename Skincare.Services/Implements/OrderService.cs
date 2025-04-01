@@ -116,9 +116,20 @@ namespace Skincare.Services.Implements
                     if (voucher == null)
                         throw new NotFoundException($"Voucher with ID {orderDto.VoucherId.Value} not found.");
                     
-                    // Validate voucher is not expired
-                    if (voucher.ExpiredAt < DateTime.UtcNow)
-                        throw new InvalidOperationException("This voucher has expired.");
+                    // Get current date and time in local timezone
+                    var now = DateTime.Now;
+                    var today = now.Date;
+                    
+                    _logger.LogInformation($"Validating voucher {voucher.VoucherId} ({voucher.Code}) for order");
+                    _logger.LogInformation($"Current date/time: {now:yyyy-MM-dd HH:mm:ss}, Voucher expires: {voucher.ExpiredAt:yyyy-MM-dd HH:mm:ss}");
+                    
+                    // Validate voucher has started
+                    if (voucher.StartedAt.Date > today)
+                        throw new InvalidOperationException($"Voucher {voucher.Code} will be active from {voucher.StartedAt:yyyy-MM-dd}.");
+                    
+                    // Validate voucher is not expired - check date portion only to include the entire expiry day
+                    if (!voucher.IsInfinity && voucher.ExpiredAt.Date < today)
+                        throw new InvalidOperationException($"This voucher has expired on {voucher.ExpiredAt:yyyy-MM-dd}.");
                     
                     // Validate voucher is active (has quantity or is infinity)
                     if (!voucher.IsInfinity && voucher.Quantity <= 0)

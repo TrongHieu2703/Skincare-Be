@@ -56,28 +56,38 @@ namespace Skincare.Services.Implements
         public async Task<IEnumerable<VoucherDto>> GetAvailableVouchersAsync()
         {
             var allVouchers = await _voucherRepository.GetAllVouchersAsync();
-            var now = DateTime.UtcNow;
             
-            Console.WriteLine($"Current UTC time: {now}");
+            // Get current date in local time without time component
+            var now = DateTime.Now;
+            var today = now.Date;  // This gives 00:00:00 for today
+            
+            Console.WriteLine($"Current local date and time: {now:yyyy-MM-dd HH:mm:ss}");
+            Console.WriteLine($"Current local date without time: {today:yyyy-MM-dd}");
             
             var availableVouchers = allVouchers.Where(v => 
-                (v.ExpiredAt > now) && 
-                (v.StartedAt <= now) &&
+                // Check start date (voucher has started) - compare date portions only
+                (v.StartedAt.Date <= today) && 
+                // Check expiry date (voucher hasn't expired) - consider the entire day for expiry
+                (v.IsInfinity || v.ExpiredAt.Date >= today) &&
+                // Check quantity
                 (v.IsInfinity || v.Quantity > 0)
             ).ToList();
             
             // Debug logging
             foreach (var voucher in allVouchers)
             {
-                bool isExpired = voucher.ExpiredAt <= now;
-                bool hasStarted = voucher.StartedAt <= now;
+                // Compare dates properly
+                bool hasStarted = voucher.StartedAt.Date <= today;
+                bool isExpired = !voucher.IsInfinity && voucher.ExpiredAt.Date < today;
                 bool hasQuantity = voucher.IsInfinity || voucher.Quantity > 0;
-                bool isAvailable = !isExpired && hasStarted && hasQuantity;
+                bool isShipping = !voucher.IsPercent && voucher.Value == 0;
+                bool isAvailable = hasStarted && !isExpired && hasQuantity;
                 
                 Console.WriteLine($"Voucher {voucher.Code} ({voucher.VoucherId}):");
-                Console.WriteLine($"  StartedAt: {voucher.StartedAt}, HasStarted: {hasStarted}");
-                Console.WriteLine($"  ExpiredAt: {voucher.ExpiredAt}, IsExpired: {isExpired}");
+                Console.WriteLine($"  StartedAt: {voucher.StartedAt:yyyy-MM-dd}, HasStarted: {hasStarted}");
+                Console.WriteLine($"  ExpiredAt: {voucher.ExpiredAt:yyyy-MM-dd}, IsExpired: {isExpired}");
                 Console.WriteLine($"  Quantity: {voucher.Quantity}, IsInfinity: {voucher.IsInfinity}, HasQuantity: {hasQuantity}");
+                Console.WriteLine($"  IsShipping: {isShipping}, IsPercent: {voucher.IsPercent}, Value: {voucher.Value}");
                 Console.WriteLine($"  IsAvailable: {isAvailable}");
             }
             
