@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Skincare.BusinessObjects.DTOs;
 using Skincare.BusinessObjects.Exceptions; // import custom exceptions
