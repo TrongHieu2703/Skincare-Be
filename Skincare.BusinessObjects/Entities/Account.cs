@@ -35,15 +35,9 @@ public partial class Account
 
     public DateTime? OtpExpiry { get; set; }
 
-    public virtual ICollection<BlogPost> BlogPosts { get; set; } = new List<BlogPost>();
-
     public virtual ICollection<Cart> Carts { get; set; } = new List<Cart>();
-
-    public virtual ICollection<CustomerTest> CustomerTests { get; set; } = new List<CustomerTest>();
 
     public virtual ICollection<Order> Orders { get; set; } = new List<Order>();
 
     public virtual ICollection<Review> Reviews { get; set; } = new List<Review>();
-
-    public virtual ICollection<SkinCareRoutine> SkinCareRoutines { get; set; } = new List<SkinCareRoutine>();
 }
