@@ -9,7 +9,10 @@ namespace Skincare.Services.Interfaces
     {
         Task<LoginResponse> LoginAsync(LoginRequest loginRequest);
         Task<LoginResponse> RegisterAsync(RegisterRequest registerRequest);
+        Task<LoginResponse> RefreshTokenAsync(string refreshToken);
+        Task<bool> RevokeRefreshTokenAsync(int userId);
         string GenerateJwtToken(Account account);
+        string GenerateRefreshToken();
         
         Task<string?> UploadAvatarForRegistration(IFormFile? avatar);
     }

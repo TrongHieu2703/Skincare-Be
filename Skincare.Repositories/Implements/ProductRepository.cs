@@ -224,11 +224,23 @@ namespace Skincare.Repositories.Implements
         {
             return await _context.Products
                 .Include(p => p.ProductType)
-                .Include(p => p.ProductBrand)
                 .Include(p => p.ProductSkinTypes)
-                    .ThenInclude(pst => pst.SkinType)
+                .ThenInclude(pst => pst.SkinType)
+                .Include(p => p.Inventories)
+                .Include(p => p.Reviews)
                 .Where(p => p.ProductSkinTypes.Any(pst => pst.SkinTypeId == skinTypeId))
                 .ToListAsync();
+        }
+
+        public IQueryable<Product> GetAllProductsQueryable()
+        {
+            return _context.Products
+                .Include(p => p.ProductType)
+                .Include(p => p.ProductSkinTypes)
+                .ThenInclude(pst => pst.SkinType)
+                .Include(p => p.Inventories)
+                .Include(p => p.Reviews)
+                .AsQueryable();
         }
 
         public async Task<int> GetTotalInventoryQuantityAsync(int productId)

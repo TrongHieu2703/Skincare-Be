@@ -47,6 +47,19 @@ namespace Skincare.Repositories.Implements
             }
         }
 
+        public async Task<Account> GetByIdAsync(int id)
+        {
+            try
+            {
+                return await _context.Accounts.FindAsync(id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error fetching account with ID {id}");
+                throw;
+            }
+        }
+
         public async Task<Account> GetByEmailAsync(string email)
         {
             try
@@ -71,6 +84,21 @@ namespace Skincare.Repositories.Implements
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Error retrieving account with phone number: {phoneNumber}");
+                throw;
+            }
+        }
+
+        public async Task<Account> GetByRefreshTokenAsync(string refreshToken)
+        {
+            try
+            {
+                return await _context.Accounts
+                    .AsNoTracking()
+                    .SingleOrDefaultAsync(a => a.RefreshToken == refreshToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching account with refresh token");
                 throw;
             }
         }
@@ -110,6 +138,8 @@ namespace Skincare.Repositories.Implements
                 existingAccount.Status = account.Status;
                 existingAccount.PasswordHash = account.PasswordHash;
                 existingAccount.Role = account.Role;
+                existingAccount.RefreshToken = account.RefreshToken;
+                existingAccount.RefreshTokenExpiry = account.RefreshTokenExpiry;
 
                 await _context.SaveChangesAsync();
             }

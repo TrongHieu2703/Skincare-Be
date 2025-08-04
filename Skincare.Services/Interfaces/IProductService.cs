@@ -58,5 +58,8 @@ namespace Skincare.Services.Interfaces
         Task<ProductDto> UpdateProductWithImageAsync(int id, UpdateProductDto updateProductDto, IFormFile image);
         
         Task<IEnumerable<ProductDto>> GetProductsBySkinTypeAsync(int skinTypeId);
+
+        Task<(IEnumerable<ProductDto> Products, int TotalPages, int TotalItems)> SearchProductsAsync(string keyword, int pageNumber, int pageSize);
+        Task<(IEnumerable<ProductDto> Products, int TotalPages, int TotalItems)> AdvancedSearchAsync(AdvancedSearchDto searchDto);
     }
 }

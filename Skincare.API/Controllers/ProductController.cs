@@ -1,315 +1,375 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Caching.Memory;
 using Skincare.BusinessObjects.DTOs;
 using Skincare.BusinessObjects.Exceptions;
 using Skincare.Services.Interfaces;
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
 using Skincare.Services.Implements;
 using System.Text.Json;
+using Skincare.API.Attributes;
 
 namespace Skincare.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [ApiVersion("1.0")]
     public class ProductController : ControllerBase
     {
         private readonly IProductService _productService;
         private readonly ILogger<ProductController> _logger;
-        private readonly IMemoryCache _cache;
-        private readonly TimeSpan _cacheDuration = TimeSpan.FromMinutes(5); // Cache 5 phút
 
-        private readonly IFileService _fileService;
-
-        public ProductController(
-            IProductService productService,
-            ILogger<ProductController> logger,
-            IMemoryCache cache,
-            IFileService fileService)
+        public ProductController(IProductService productService, ILogger<ProductController> logger)
         {
             _productService = productService;
             _logger = logger;
-            _cache = cache;
-            _fileService = fileService;
         }
 
-        // GET: api/Product
         [HttpGet]
         public async Task<IActionResult> GetAllProducts(
-            [FromQuery] int pageNumber = 1, 
+            [FromQuery] int pageNumber = 1,
             [FromQuery] int pageSize = 10,
-            [FromQuery] int? skinTypeId = null,
-            [FromQuery] int? productTypeId = null,
-            [FromQuery] int? branchId = null,
-            [FromQuery] decimal? minPrice = null,
-            [FromQuery] decimal? maxPrice = null,
-            [FromQuery] decimal? minRating = null,
-            [FromQuery] decimal? maxRating = null,
-            [FromQuery] string sortBy = null)
+            [FromQuery] string sortBy = "name",
+            [FromQuery] bool includeInactive = false)
         {
             try
             {
-                _logger.LogInformation($"Getting products page {pageNumber}, size {pageSize} with filters: " +
-                    $"skinTypeId={skinTypeId}, productTypeId={productTypeId}, branchId={branchId}, " +
-                    $"price range={minPrice}-{maxPrice}, rating range={minRating}-{maxRating}, sortBy={sortBy}");
-
-                var (products, totalPages, totalItems) = await _productService.GetProductsWithFiltersAsync(
-                    pageNumber, pageSize, skinTypeId, productTypeId, branchId, minPrice, maxPrice, minRating, maxRating, sortBy);
+                var (products, totalPages, totalItems) = await _productService.GetAllProductsAsync(pageNumber, pageSize);
                 
-                _logger.LogInformation($"Retrieved {products.Count()} products, Total pages: {totalPages}, Total items: {totalItems}");
-                
-                var response = new { 
-                    message = "Products retrieved successfully", 
-                    data = products,
-                    pagination = new {
-                        currentPage = pageNumber,
-                        pageSize = pageSize,
-                        totalPages = totalPages,
-                        totalItems = totalItems
-                    }
-                };
+                var response = ApiResponse<IEnumerable<ProductDto>>.PaginatedResult(
+                    products, 
+                    totalItems, 
+                    pageNumber, 
+                    pageSize, 
+                    "Products retrieved successfully"
+                );
 
-                _logger.LogInformation($"Sending response with pagination: {JsonSerializer.Serialize(response.pagination)}");
+                // Add deprecation metadata for V1
+                response.Metadata.Version = "1.0";
+                response.Metadata.CorrelationId = HttpContext.Response.Headers["X-Correlation-ID"].ToString();
+                
                 return Ok(response);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error in GetAllProducts: {ErrorMessage}", ex.Message);
-                return StatusCode(500, new { message = "Internal server error", details = ex.Message });
+                _logger.LogError(ex, "Error getting all products");
+                var errorResponse = ApiResponse<IEnumerable<ProductDto>>.ErrorResult(
+                    "Failed to retrieve products",
+                    new List<ApiError> { ApiError.SystemError(ex.Message) }
+                );
+                return StatusCode(500, errorResponse);
             }
         }
 
-        // GET: api/Product/5
         [HttpGet("{id}")]
-        public async Task<IActionResult> GetProduct(int id)
+        public async Task<IActionResult> GetProductById(int id)
         {
             try
             {
                 var product = await _productService.GetProductByIdAsync(id);
-
                 if (product == null)
                 {
-                    _logger.LogWarning($"Product with ID {id} not found");
-                    return NotFound(new { message = "Product not found", errorCode = "PRODUCT_NOT_FOUND" });
+                    var errorResponse = ApiResponse<ProductDto>.ErrorResult(
+                        "Product not found",
+                        new List<ApiError> { ApiError.BusinessError("PRODUCT_NOT_FOUND", "Product with specified ID does not exist") }
+                    );
+                    return NotFound(errorResponse);
                 }
 
-                if (!string.IsNullOrEmpty(product.Image))
-                {
-                    if (!product.Image.StartsWith("/"))
-                    {
-                        product.Image = "/" + product.Image;
-                    }
-                }
-
-                return Ok(new { message = "Product retrieved successfully", data = product });
+                var response = ApiResponse<ProductDto>.SuccessResult(product, "Product retrieved successfully");
+                response.Metadata.Version = "1.0";
+                response.Metadata.CorrelationId = HttpContext.Response.Headers["X-Correlation-ID"].ToString();
+                
+                return Ok(response);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error retrieving product with id {id}");
-                return StatusCode(500, new { message = "Internal server error", details = ex.Message });
+                _logger.LogError(ex, "Error getting product by ID: {ProductId}", id);
+                var errorResponse = ApiResponse<ProductDto>.ErrorResult(
+                    "Failed to retrieve product",
+                    new List<ApiError> { ApiError.SystemError(ex.Message) }
+                );
+                return StatusCode(500, errorResponse);
             }
         }
 
-        // GET: api/Product/product-type/{id}
-        [HttpGet("product-type/{productTypeId}")]
-        public async Task<IActionResult> GetProductsByType(int productTypeId, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
-        {
-            try
-            {
-                var (products, totalPages, totalItems) = await _productService.GetProductsByTypeWithPaginationAsync(productTypeId, pageNumber, pageSize);
-                return Ok(new { 
-                    message = "Products retrieved successfully", 
-                    data = products,
-                    pagination = new {
-                        currentPage = pageNumber,
-                        pageSize = pageSize,
-                        totalPages = totalPages,
-                        totalItems = totalItems
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error retrieving products for type {productTypeId}");
-                return StatusCode(500, new { message = "Internal server error", details = ex.Message });
-            }
-        }
-
-        // GET: api/Product/branch/{id}
-        [HttpGet("branch/{branchId}")]
-        public async Task<IActionResult> GetProductsByBranch(int branchId, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
-        {
-            try
-            {
-                var (products, totalPages, totalItems) = await _productService.GetProductsByBranchWithPaginationAsync(branchId, pageNumber, pageSize);
-                return Ok(new { 
-                    message = "Products retrieved successfully", 
-                    data = products,
-                    pagination = new {
-                        currentPage = pageNumber,
-                        pageSize = pageSize,
-                        totalPages = totalPages,
-                        totalItems = totalItems
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error retrieving products for branch {branchId}");
-                return StatusCode(500, new { message = "Internal server error", details = ex.Message });
-            }
-        }
-
-        // GET: api/Product/search?keyword=abc
-        [HttpGet("search")]
-        public async Task<IActionResult> SearchProducts([FromQuery] string keyword)
-        {
-            try
-            {
-                _logger.LogInformation($"Received search request with keyword: '{keyword}'");
-                
-                if (string.IsNullOrWhiteSpace(keyword))
-                {
-                    _logger.LogWarning("Empty search keyword provided");
-                    return Ok(new { message = "No search term provided", data = new List<ProductDto>() });
-                }
-                
-                // Trim and ensure proper encoding for Vietnamese characters
-                string processedKeyword = keyword.Trim();
-                _logger.LogInformation($"Processing search with keyword: '{processedKeyword}'");
-
-                var products = await _productService.SearchProductsAsync(processedKeyword);
-                _logger.LogInformation($"Search completed, found {products.Count()} products");
-                
-                // Process images to ensure they are formatted correctly
-                foreach (var product in products)
-                {
-                    if (!string.IsNullOrEmpty(product.Image))
-                    {
-                        if (!product.Image.StartsWith("/"))
-                        {
-                            product.Image = "/" + product.Image;
-                            _logger.LogDebug($"Formatted image path for product {product.Id}: {product.Image}");
-                        }
-                    }
-                }
-                
-                return Ok(new { message = $"Found {products.Count()} products for '{processedKeyword}'", data = products });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error searching products with keyword '{keyword}'");
-                return StatusCode(500, new { message = "Internal server error", details = ex.Message });
-            }
-        }
-
-        // POST: api/Product
         [HttpPost]
         [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> CreateProduct([FromForm] CreateProductDto createProductDto, IFormFile image = null)
+        public async Task<IActionResult> CreateProduct([FromBody] CreateProductDto createProductDto)
         {
             try
             {
-                var product = await _productService.CreateProductWithImageAsync(createProductDto, image);
-                return CreatedAtAction(nameof(GetProduct), new { id = product.Id }, new { message = "Product created successfully", data = product });
+                var product = await _productService.CreateProductAsync(createProductDto);
+                var response = ApiResponse<ProductDto>.SuccessResult(product, "Product created successfully");
+                response.Metadata.Version = "1.0";
+                response.Metadata.CorrelationId = HttpContext.Response.Headers["X-Correlation-ID"].ToString();
+                
+                return CreatedAtAction(nameof(GetProductById), new { id = product.Id }, response);
+            }
+            catch (ValidationException ex)
+            {
+                var errors = ex.Errors.Select(e => ApiError.ValidationError(e.PropertyName, e.ErrorMessage)).ToList();
+                var errorResponse = ApiResponse<ProductDto>.ErrorResult("Validation failed", errors);
+                return BadRequest(errorResponse);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error creating product");
-                return StatusCode(500, new { message = "Internal server error", details = ex.Message });
+                var errorResponse = ApiResponse<ProductDto>.ErrorResult(
+                    "Failed to create product",
+                    new List<ApiError> { ApiError.SystemError(ex.Message) }
+                );
+                return StatusCode(500, errorResponse);
             }
         }
 
-        [HttpPut]
-        [Route("{id:int}")]
+        [HttpPut("{id}")]
         [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> UpdateProductAsync(int id, [FromBody] UpdateProductDto product)
+        public async Task<IActionResult> UpdateProduct(int id, [FromBody] UpdateProductDto updateProductDto)
         {
-            _logger.LogInformation($"Updating product with id: {id}");
-            if (product == null)
-            {
-                _logger.LogWarning("Update product failed: Product is null");
-                return BadRequest(new { success = false, message = "Product cannot be null" });
-            }
-
             try
             {
-                var result = await _productService.UpdateProductAsync(id, product);
-                return Ok(new { success = true, message = "Update product successfully", data = result });
+                var product = await _productService.UpdateProductAsync(id, updateProductDto);
+                if (product == null)
+                {
+                    var errorResponse = ApiResponse<ProductDto>.ErrorResult(
+                        "Product not found",
+                        new List<ApiError> { ApiError.BusinessError("PRODUCT_NOT_FOUND", "Product with specified ID does not exist") }
+                    );
+                    return NotFound(errorResponse);
+                }
+
+                var response = ApiResponse<ProductDto>.SuccessResult(product, "Product updated successfully");
+                response.Metadata.Version = "1.0";
+                response.Metadata.CorrelationId = HttpContext.Response.Headers["X-Correlation-ID"].ToString();
+                
+                return Ok(response);
+            }
+            catch (ValidationException ex)
+            {
+                var errors = ex.Errors.Select(e => ApiError.ValidationError(e.PropertyName, e.ErrorMessage)).ToList();
+                var errorResponse = ApiResponse<ProductDto>.ErrorResult("Validation failed", errors);
+                return BadRequest(errorResponse);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error updating product with id: {id}");
-                return StatusCode(500, new { success = false, message = "Error updating product: " + ex.Message });
+                _logger.LogError(ex, "Error updating product: {ProductId}", id);
+                var errorResponse = ApiResponse<ProductDto>.ErrorResult(
+                    "Failed to update product",
+                    new List<ApiError> { ApiError.SystemError(ex.Message) }
+                );
+                return StatusCode(500, errorResponse);
             }
         }
 
-        [HttpPost("upload-product-image")]
-        [Consumes("multipart/form-data")]
-        public async Task<IActionResult> UploadProductImage([FromForm] IFormFile image)
-        {
-            if (image == null || image.Length == 0)
-                return BadRequest(new { message = "No image provided" });
-
-            try
-            {
-                var filePath = await _fileService.SaveFileAsync(image, "product-images");
-                return Ok(new { imageUrl = filePath });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error uploading product image");
-                return StatusCode(500, "Internal server error");
-            }
-        }
-
-        // DELETE: api/Product/5
         [HttpDelete("{id}")]
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteProduct(int id)
         {
             try
             {
-                await _productService.DeleteProductAsync(id);
-                return Ok(new { message = $"Product with ID {id} deleted successfully" });
-            }
-            catch (NotFoundException nfex)
-            {
-                _logger.LogWarning(nfex, "Product not found for delete");
-                return NotFound(new { message = nfex.Message, errorCode = "PRODUCT_NOT_FOUND" });
+                var result = await _productService.DeleteProductAsync(id);
+                if (!result)
+                {
+                    var errorResponse = ApiResponse<bool>.ErrorResult(
+                        "Product not found",
+                        new List<ApiError> { ApiError.BusinessError("PRODUCT_NOT_FOUND", "Product with specified ID does not exist") }
+                    );
+                    return NotFound(errorResponse);
+                }
+
+                var response = ApiResponse<bool>.SuccessResult(true, "Product deleted successfully");
+                response.Metadata.Version = "1.0";
+                response.Metadata.CorrelationId = HttpContext.Response.Headers["X-Correlation-ID"].ToString();
+                
+                return Ok(response);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error deleting product with id {id}");
-                return StatusCode(500, new { message = "Internal server error", details = ex.Message });
+                _logger.LogError(ex, "Error deleting product: {ProductId}", id);
+                var errorResponse = ApiResponse<bool>.ErrorResult(
+                    "Failed to delete product",
+                    new List<ApiError> { ApiError.SystemError(ex.Message) }
+                );
+                return StatusCode(500, errorResponse);
             }
         }
 
-        // GET: api/Product/skin-type/{skinTypeId}
-        [HttpGet("skin-type/{skinTypeId}")]
-        public async Task<IActionResult> GetProductsBySkinType(int skinTypeId, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
+        [HttpGet("search")]
+        public async Task<IActionResult> SearchProducts(
+            [FromQuery] string keyword,
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10)
         {
             try
             {
-                var (products, totalPages, totalItems) = await _productService.GetProductsBySkinTypeWithPaginationAsync(skinTypeId, pageNumber, pageSize);
-                return Ok(new { 
-                    message = "Products retrieved successfully", 
+                if (string.IsNullOrWhiteSpace(keyword))
+                {
+                    var errorResponse = ApiResponse<IEnumerable<ProductDto>>.ErrorResult(
+                        "Search keyword is required",
+                        new List<ApiError> { ApiError.ValidationError("keyword", "Search keyword cannot be empty") }
+                    );
+                    return BadRequest(errorResponse);
+                }
+
+                var (products, totalPages, totalItems) = await _productService.SearchProductsAsync(keyword, pageNumber, pageSize);
+                
+                var response = ApiResponse<IEnumerable<ProductDto>>.PaginatedResult(
+                    products, 
+                    totalItems, 
+                    pageNumber, 
+                    pageSize, 
+                    "Search completed successfully"
+                );
+                response.Metadata.Version = "1.0";
+                response.Metadata.CorrelationId = HttpContext.Response.Headers["X-Correlation-ID"].ToString();
+                
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error searching products with keyword: {Keyword}", keyword);
+                var errorResponse = ApiResponse<IEnumerable<ProductDto>>.ErrorResult(
+                    "Failed to search products",
+                    new List<ApiError> { ApiError.SystemError(ex.Message) }
+                );
+                return StatusCode(500, errorResponse);
+            }
+        }
+
+        [HttpPost("advanced-search")]
+        public async Task<IActionResult> AdvancedSearch([FromBody] AdvancedSearchDto searchDto)
+        {
+            try
+            {
+                var (products, totalPages, totalItems) = await _productService.AdvancedSearchAsync(searchDto);
+                
+                var response = ApiResponse<IEnumerable<ProductDto>>.PaginatedResult(
+                    products, 
+                    totalItems, 
+                    searchDto.PageNumber, 
+                    searchDto.PageSize, 
+                    "Advanced search completed successfully"
+                );
+                response.Metadata.Version = "1.0";
+                response.Metadata.CorrelationId = HttpContext.Response.Headers["X-Correlation-ID"].ToString();
+                
+                return Ok(response);
+            }
+            catch (ValidationException ex)
+            {
+                var errors = ex.Errors.Select(e => ApiError.ValidationError(e.PropertyName, e.ErrorMessage)).ToList();
+                var errorResponse = ApiResponse<IEnumerable<ProductDto>>.ErrorResult("Validation failed", errors);
+                return BadRequest(errorResponse);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in advanced search");
+                var errorResponse = ApiResponse<IEnumerable<ProductDto>>.ErrorResult(
+                    "Failed to perform advanced search",
+                    new List<ApiError> { ApiError.SystemError(ex.Message) }
+                );
+                return StatusCode(500, errorResponse);
+            }
+        }
+
+        // GET: api/Product/product-type/5
+        [HttpGet("product-type/{productTypeId}")]
+        public async Task<IActionResult> GetProductsByType(int productTypeId, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
+        {
+            try
+            {
+                var (products, totalPages, totalItems) = await _productService.GetProductsByTypeWithPaginationAsync(productTypeId, pageNumber, pageSize);
+                
+                var response = new { 
+                    message = "Products by type retrieved successfully", 
                     data = products,
                     pagination = new {
                         currentPage = pageNumber,
                         pageSize = pageSize,
                         totalPages = totalPages,
                         totalItems = totalItems
+                    },
+                    meta = new {
+                        version = "1.0",
+                        deprecated = true,
+                        deprecationDate = "2024-12-31",
+                        migrationGuide = "/api/docs/migration-v2"
                     }
-                });
+                };
+
+                return Ok(response);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error retrieving products for skin type {skinTypeId}");
+                _logger.LogError(ex, $"Error in GetProductsByType for type {productTypeId}: {ex.Message}");
+                return StatusCode(500, new { message = "Internal server error", details = ex.Message });
+            }
+        }
+
+        // GET: api/Product/branch/5
+        [HttpGet("branch/{branchId}")]
+        public async Task<IActionResult> GetProductsByBranch(int branchId, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
+        {
+            try
+            {
+                var (products, totalPages, totalItems) = await _productService.GetProductsByBranchWithPaginationAsync(branchId, pageNumber, pageSize);
+                
+                var response = new { 
+                    message = "Products by branch retrieved successfully", 
+                    data = products,
+                    pagination = new {
+                        currentPage = pageNumber,
+                        pageSize = pageSize,
+                        totalPages = totalPages,
+                        totalItems = totalItems
+                    },
+                    meta = new {
+                        version = "1.0",
+                        deprecated = true,
+                        deprecationDate = "2024-12-31",
+                        migrationGuide = "/api/docs/migration-v2"
+                    }
+                };
+
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error in GetProductsByBranch for branch {branchId}: {ex.Message}");
+                return StatusCode(500, new { message = "Internal server error", details = ex.Message });
+            }
+        }
+
+        // GET: api/Product/skin-type/5
+        [HttpGet("skin-type/{skinTypeId}")]
+        public async Task<IActionResult> GetProductsBySkinType(int skinTypeId, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
+        {
+            try
+            {
+                var (products, totalPages, totalItems) = await _productService.GetProductsBySkinTypeWithPaginationAsync(skinTypeId, pageNumber, pageSize);
+                
+                var response = new { 
+                    message = "Products by skin type retrieved successfully", 
+                    data = products,
+                    pagination = new {
+                        currentPage = pageNumber,
+                        pageSize = pageSize,
+                        totalPages = totalPages,
+                        totalItems = totalItems
+                    },
+                    meta = new {
+                        version = "1.0",
+                        deprecated = true,
+                        deprecationDate = "2024-12-31",
+                        migrationGuide = "/api/docs/migration-v2"
+                    }
+                };
+
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error in GetProductsBySkinType for skin type {skinTypeId}: {ex.Message}");
                 return StatusCode(500, new { message = "Internal server error", details = ex.Message });
             }
         }
@@ -318,58 +378,50 @@ namespace Skincare.API.Controllers
         [HttpGet("test")]
         public IActionResult Test()
         {
-            try
-            {
-                _logger.LogInformation("Test endpoint called");
-                return Ok(new { message = "API is working", timestamp = DateTime.UtcNow });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error in test endpoint");
-                return StatusCode(500, new { message = "Error in test endpoint", error = ex.Message });
-            }
+            var response = new { 
+                message = "Product API is working", 
+                timestamp = DateTime.UtcNow,
+                version = "1.0",
+                deprecated = true,
+                deprecationDate = "2024-12-31",
+                migrationGuide = "/api/docs/migration-v2"
+            };
+            return Ok(response);
         }
-        
+
         // POST: api/Product/compare
         [HttpPost("compare")]
         public async Task<IActionResult> CompareProducts([FromBody] CompareRequestDto compareRequestDto)
         {
             try
             {
-                if (compareRequestDto == null || compareRequestDto.ProductIds == null || compareRequestDto.ProductIds.Count == 0)
+                if (!ModelState.IsValid)
                 {
-                    return BadRequest(new { message = "No products selected for comparison" });
+                    return BadRequest(new { message = "Invalid request data", errors = ModelState });
                 }
-                
-                if (compareRequestDto.ProductIds.Count > 4)
-                {
-                    return BadRequest(new { message = "Maximum 4 products allowed for comparison" });
-                }
-                
-                _logger.LogInformation($"Comparing products with IDs: {string.Join(", ", compareRequestDto.ProductIds)}");
-                
+
                 var products = await _productService.CompareProductsAsync(compareRequestDto);
                 
-                // Process images to ensure they are formatted correctly
-                foreach (var product in products)
-                {
-                    if (!string.IsNullOrEmpty(product.Image))
-                    {
-                        if (!product.Image.StartsWith("/"))
-                        {
-                            product.Image = "/" + product.Image;
-                        }
+                var response = new { 
+                    message = "Products comparison completed successfully", 
+                    data = products,
+                    comparisonInfo = new {
+                        productIds = compareRequestDto.ProductIds,
+                        productsCount = products.Count()
+                    },
+                    meta = new {
+                        version = "1.0",
+                        deprecated = true,
+                        deprecationDate = "2024-12-31",
+                        migrationGuide = "/api/docs/migration-v2"
                     }
-                }
-                
-                return Ok(new { 
-                    message = "Products compared successfully", 
-                    data = products 
-                });
+                };
+
+                return Ok(response);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error comparing products");
+                _logger.LogError(ex, "Error in CompareProducts: {ErrorMessage}", ex.Message);
                 return StatusCode(500, new { message = "Internal server error", details = ex.Message });
             }
         }
@@ -379,8 +431,6 @@ namespace Skincare.API.Controllers
     {
     }
 
-    // Extension method to get all keys from IMemoryCache
-
     public static class MemoryCacheExtensions
     {
         private static readonly Lazy<object> _keys = new Lazy<object>(() => { return new object(); });
@@ -388,29 +438,30 @@ namespace Skincare.API.Controllers
 
         public static HashSet<string> GetKeys<T>(this IMemoryCache memoryCache)
         {
-            var keys = _keysCollection.GetOrAdd(_keys.Value, _ => new HashSet<string>());
-            return keys;
+            return _keysCollection.GetOrAdd(_keys.Value, _ => new HashSet<string>());
         }
 
         public static void AddKey(this IMemoryCache memoryCache, string key)
         {
-            var keys = _keysCollection.GetOrAdd(_keys.Value, _ => new HashSet<string>());
+            var keys = memoryCache.GetKeys<object>();
             keys.Add(key);
         }
 
         public static void RemoveKey(this IMemoryCache memoryCache, string key)
         {
-            var keys = _keysCollection.GetOrAdd(_keys.Value, _ => new HashSet<string>());
+            var keys = memoryCache.GetKeys<object>();
             keys.Remove(key);
         }
 
         private static TValue GetOrAdd<TKey, TValue>(this Dictionary<TKey, TValue> dict, TKey key, Func<TKey, TValue> valueFactory)
         {
-            if (!dict.TryGetValue(key, out var value))
+            if (dict.TryGetValue(key, out TValue value))
             {
-                value = valueFactory(key);
-                dict[key] = value;
+                return value;
             }
+
+            value = valueFactory(key);
+            dict[key] = value;
             return value;
         }
     }

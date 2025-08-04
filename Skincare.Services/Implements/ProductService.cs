@@ -4,12 +4,15 @@ using Skincare.BusinessObjects.Entities;
 using Skincare.BusinessObjects.Exceptions; 
 using Skincare.Repositories.Interfaces;
 using Skincare.Services.Interfaces;
+using Skincare.Services.Constants;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using System.Threading;
+using System.Text.Json; // Added for JsonSerializer
+using Microsoft.EntityFrameworkCore; // Added for CountAsync and Skip/Take
 
 namespace Skincare.Services.Implements
 {
@@ -20,6 +23,7 @@ namespace Skincare.Services.Implements
         private readonly IFileService _fileService;
         private readonly IInventoryRepository _inventoryRepository;
         private readonly IProductSkinTypeRepository _productSkinTypeRepository;
+        private readonly ICacheService _cacheService;
         // Thêm biến để kiểm soát số lượng request
         private static readonly Dictionary<string, DateTime> _lastUploadTime = new Dictionary<string, DateTime>();
         private static readonly SemaphoreSlim _uploadSemaphore = new SemaphoreSlim(5, 5); // Giới hạn 5 upload đồng thời
@@ -29,45 +33,52 @@ namespace Skincare.Services.Implements
             ILogger<ProductService> logger,
             IFileService fileService,
             IInventoryRepository inventoryRepository,
-            IProductSkinTypeRepository productSkinTypeRepository)
+            IProductSkinTypeRepository productSkinTypeRepository,
+            ICacheService cacheService)
         {
             _productRepository = productRepository;
             _logger = logger;
             _fileService = fileService;
             _inventoryRepository = inventoryRepository;
             _productSkinTypeRepository = productSkinTypeRepository;
+            _cacheService = cacheService;
         }
 
         public async Task<(IEnumerable<ProductDto> Products, int TotalPages, int TotalItems)> GetAllProductsAsync(int pageNumber, int pageSize)
         {
             try
             {
-                _logger.LogInformation($"Getting all products: page {pageNumber}, size {pageSize}");
-                var (products, totalCount) = await _productRepository.GetAllProductsWithPaginationAsync(pageNumber, pageSize);
-                _logger.LogInformation($"Retrieved {products.Count()} products from repository. Total count: {totalCount}");
+                var cacheKey = $"{CacheKeys.ProductList}:{pageNumber}:{pageSize}";
                 
-                // Convert entities to DTOs with additional error checking
-                var dtos = new List<ProductDto>();
-                foreach (var product in products)
+                return await _cacheService.GetOrSetAsync(cacheKey, async () =>
                 {
-                    try
+                    _logger.LogInformation($"Getting all products: page {pageNumber}, size {pageSize}");
+                    var (products, totalCount) = await _productRepository.GetAllProductsWithPaginationAsync(pageNumber, pageSize);
+                    _logger.LogInformation($"Retrieved {products.Count()} products from repository. Total count: {totalCount}");
+                    
+                    // Convert entities to DTOs with additional error checking
+                    var dtos = new List<ProductDto>();
+                    foreach (var product in products)
                     {
-                        dtos.Add(MapToDto(product));
+                        try
+                        {
+                            dtos.Add(MapToDto(product));
+                        }
+                        catch (Exception mapEx)
+                        {
+                            _logger.LogError(mapEx, $"Error mapping product {product.Id}: {mapEx.Message}");
+                            // Continue to next product instead of failing the entire request
+                        }
                     }
-                    catch (Exception mapEx)
-                    {
-                        _logger.LogError(mapEx, $"Error mapping product {product.Id}: {mapEx.Message}");
-                        // Continue to next product instead of failing the entire request
-                    }
-                }
 
-                // Fix calculation issue - use decimal or double for math, cast to int at the end
-                decimal calculatedPages = (decimal)totalCount / pageSize;
-                int totalPages = (int)Math.Ceiling(calculatedPages);
-                
-                _logger.LogInformation($"Pagination calculation: {totalCount} items / {pageSize} per page = {calculatedPages} pages, rounded up to {totalPages} pages");
-                
-                return (dtos, totalPages, totalCount);
+                    // Fix calculation issue - use decimal or double for math, cast to int at the end
+                    decimal calculatedPages = (decimal)totalCount / pageSize;
+                    int totalPages = (int)Math.Ceiling(calculatedPages);
+                    
+                    _logger.LogInformation($"Pagination calculation: {totalCount} items / {pageSize} per page = {calculatedPages} pages, rounded up to {totalPages} pages");
+                    
+                    return (dtos, totalPages, totalCount);
+                }, TimeSpan.FromMinutes(15));
             }
             catch (Exception ex)
             {
@@ -80,13 +91,18 @@ namespace Skincare.Services.Implements
         {
             try
             {
-                var product = await _productRepository.GetProductByIdAsync(id);
-                if (product == null)
+                var cacheKey = string.Format(CacheKeys.ProductDetail, id);
+                
+                return await _cacheService.GetOrSetAsync(cacheKey, async () =>
                 {
-                    // Quăng NotFoundException nếu không tìm thấy
-                    throw new NotFoundException($"Product with ID {id} not found.");
-                }
-                return MapToDto(product);
+                    var product = await _productRepository.GetProductByIdAsync(id);
+                    if (product == null)
+                    {
+                        // Quăng NotFoundException nếu không tìm thấy
+                        throw new NotFoundException($"Product with ID {id} not found.");
+                    }
+                    return MapToDto(product);
+                }, TimeSpan.FromMinutes(30));
             }
             catch (Exception ex)
             {
@@ -99,13 +115,17 @@ namespace Skincare.Services.Implements
         {
             try
             {
-                var products = await _productRepository.GetByTypeAsync(productTypeId);
-                // Nếu không tìm thấy sản phẩm, có thể trả về danh sách rỗng
-                return products.Select(MapToDto).ToList();
+                var cacheKey = string.Format(CacheKeys.ProductByCategory, productTypeId);
+                
+                return await _cacheService.GetOrSetAsync(cacheKey, async () =>
+                {
+                    var products = await _productRepository.GetProductsByTypeAsync(productTypeId);
+                    return products.Select(MapToDto).ToList();
+                }, TimeSpan.FromMinutes(15));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error in GetByTypeAsync for type {productTypeId}");
+                _logger.LogError(ex, $"Error in GetByTypeAsync for productTypeId {productTypeId}");
                 throw;
             }
         }
@@ -114,12 +134,17 @@ namespace Skincare.Services.Implements
         {
             try
             {
-                var products = await _productRepository.SearchProductsAsync(keyword);
-                return products.Select(MapToDto).ToList();
+                var cacheKey = string.Format(CacheKeys.ProductSearch, keyword.ToLower());
+                
+                return await _cacheService.GetOrSetAsync(cacheKey, async () =>
+                {
+                    var products = await _productRepository.SearchProductsAsync(keyword);
+                    return products.Select(MapToDto).ToList();
+                }, TimeSpan.FromMinutes(10));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error in SearchProductsAsync with keyword {keyword}");
+                _logger.LogError(ex, $"Error in SearchProductsAsync for keyword: {keyword}");
                 throw;
             }
         }
@@ -128,8 +153,13 @@ namespace Skincare.Services.Implements
         {
             try
             {
-                var products = await _productRepository.FilterProductsAsync(category, inStock, minPrice, maxPrice);
-                return products.Select(MapToDto).ToList();
+                var cacheKey = $"products:filter:{category}:{inStock}:{minPrice}:{maxPrice}";
+                
+                return await _cacheService.GetOrSetAsync(cacheKey, async () =>
+                {
+                    var products = await _productRepository.FilterProductsAsync(category, inStock, minPrice, maxPrice);
+                    return products.Select(MapToDto).ToList();
+                }, TimeSpan.FromMinutes(10));
             }
             catch (Exception ex)
             {
@@ -142,40 +172,12 @@ namespace Skincare.Services.Implements
         {
             try
             {
-                var newProduct = new Product
-                {
-                    Name = createProductDto.Name,
-                    Description = createProductDto.Description,
-                    Price = createProductDto.Price,
-                    Image = createProductDto.Image,
-                    IsAvailable = createProductDto.IsAvailable,
-                    ProductTypeId = createProductDto.ProductTypeId,
-                    ProductBrandId = createProductDto.ProductBrandId,
-                    Quantity = createProductDto.Quantity,
-                    Stock = createProductDto.Stock ?? createProductDto.Quantity
-                };
-
-                // Create the product first
-                var createdProduct = await _productRepository.CreateProductAsync(newProduct);
+                var product = await _productRepository.CreateProductAsync(createProductDto);
                 
-                // If skin type IDs are provided, create product-skin type relationships
-                if (createProductDto.SkinTypeIds != null && createProductDto.SkinTypeIds.Any())
-                {
-                    foreach (var skinTypeId in createProductDto.SkinTypeIds)
-                    {
-                        var productSkinType = new ProductSkinType
-                        {
-                            ProductId = createdProduct.Id,
-                            SkinTypeId = skinTypeId
-                        };
-                        
-                        await _productSkinTypeRepository.CreateAsync(productSkinType);
-                    }
-                }
+                // Invalidate related caches
+                await InvalidateProductCaches();
                 
-                // Fetch the complete product with relations for returning
-                var completeProduct = await _productRepository.GetProductByIdAsync(createdProduct.Id);
-                return MapToDto(completeProduct);
+                return MapToDto(product);
             }
             catch (Exception ex)
             {
@@ -188,100 +190,13 @@ namespace Skincare.Services.Implements
         {
             try
             {
-                // Kiểm tra sản phẩm có tồn tại không
-                var existing = await _productRepository.GetProductByIdAsync(id);
-                if (existing == null)
-                {
-                    throw new NotFoundException($"Product with ID {id} not found for update.");
-                }
-
-                // Log trước khi cập nhật
-                _logger.LogInformation($"Updating product {id} - Before update: Name={existing.Name}, Price={existing.Price}, IsAvailable={existing.IsAvailable}, Stock={existing.Stock}, Quantity={existing.Quantity}");
+                var product = await _productRepository.UpdateProductAsync(id, updateProductDto);
                 
-                // Validate stock can't be greater than quantity
-                int newStock = updateProductDto.Stock ?? existing.Stock ?? 0;
-                int newQuantity = updateProductDto.Quantity ?? existing.Quantity ?? 0;
+                // Invalidate specific product cache and related caches
+                await _cacheService.RemoveAsync(string.Format(CacheKeys.ProductDetail, id));
+                await InvalidateProductCaches();
                 
-                if (newStock > newQuantity)
-                {
-                    _logger.LogWarning($"Attempted to set stock ({newStock}) greater than quantity ({newQuantity}) for product {id}");
-                    throw new InvalidOperationException("Stock cannot be greater than quantity");
-                }
-                
-                // If stock is 0, product should not be available
-                bool newIsAvailable = updateProductDto.IsAvailable ?? existing.IsAvailable;
-                if (newStock <= 0)
-                {
-                    newIsAvailable = false;
-                    _logger.LogInformation($"Setting isAvailable to false for product {id} because stock is {newStock}");
-                }
-                else if (newStock > 0 && !newIsAvailable)
-                {
-                    // If stock is greater than 0, product should be available
-                    newIsAvailable = true;
-                    _logger.LogInformation($"Setting isAvailable to true for product {id} because stock is {newStock} > 0");
-                }
-                
-                // Ghi lại các giá trị đang được cập nhật
-                if (updateProductDto.Name != null) _logger.LogInformation($"Updating Name from '{existing.Name}' to '{updateProductDto.Name}'");
-                if (updateProductDto.Description != null) _logger.LogInformation($"Updating Description");
-                if (updateProductDto.Price.HasValue) _logger.LogInformation($"Updating Price from {existing.Price} to {updateProductDto.Price}");
-                if (updateProductDto.Image != null) _logger.LogInformation($"Updating Image from '{existing.Image}' to '{updateProductDto.Image}'");
-                _logger.LogInformation($"Updating IsAvailable from {existing.IsAvailable} to {newIsAvailable}");
-                if (updateProductDto.ProductTypeId.HasValue) _logger.LogInformation($"Updating ProductTypeId from {existing.ProductTypeId} to {updateProductDto.ProductTypeId}");
-                if (updateProductDto.ProductBrandId.HasValue) _logger.LogInformation($"Updating ProductBrandId from {existing.ProductBrandId} to {updateProductDto.ProductBrandId}");
-                if (updateProductDto.Quantity.HasValue) _logger.LogInformation($"Updating Quantity from {existing.Quantity} to {updateProductDto.Quantity}");
-                if (updateProductDto.Stock.HasValue) _logger.LogInformation($"Updating Stock from {existing.Stock} to {updateProductDto.Stock}");
-
-                existing.Name = updateProductDto.Name ?? existing.Name;
-                existing.Description = updateProductDto.Description ?? existing.Description;
-                existing.Price = updateProductDto.Price ?? existing.Price;
-                // Only update image if a new one is explicitly provided
-                if (updateProductDto.Image != null)
-                {
-                    existing.Image = updateProductDto.Image;
-                }
-                existing.IsAvailable = newIsAvailable;
-                existing.ProductTypeId = updateProductDto.ProductTypeId ?? existing.ProductTypeId;
-                existing.ProductBrandId = updateProductDto.ProductBrandId ?? existing.ProductBrandId;
-                existing.Quantity = newQuantity;
-                existing.Stock = newStock;
-
-                var updated = await _productRepository.UpdateProductAsync(existing);
-                
-                // Log sau khi cập nhật
-                _logger.LogInformation($"Product {id} updated - After update: Name={updated.Name}, Price={updated.Price}, IsAvailable={updated.IsAvailable}, Stock={updated.Stock}, Quantity={updated.Quantity}");
-                
-                // Update skin types if provided
-                if (updateProductDto.SkinTypeIds != null)
-                {
-                    // Get current skin types
-                    var currentSkinTypes = await _productSkinTypeRepository.GetByProductIdAsync(id);
-                    
-                    // Delete all existing associations
-                    foreach (var pst in currentSkinTypes)
-                    {
-                        await _productSkinTypeRepository.DeleteAsync(pst.Id);
-                    }
-                    
-                    // Create new ones
-                    foreach (var skinTypeId in updateProductDto.SkinTypeIds)
-                    {
-                        var productSkinType = new ProductSkinType
-                        {
-                            ProductId = id,
-                            SkinTypeId = skinTypeId
-                        };
-                        
-                        await _productSkinTypeRepository.CreateAsync(productSkinType);
-                    }
-                    
-                    _logger.LogInformation($"Updated skin types for product {id}");
-                }
-                
-                // Fetch the complete updated product with relations
-                var completeProduct = await _productRepository.GetProductByIdAsync(id);
-                return MapToDto(completeProduct);
+                return MapToDto(product);
             }
             catch (Exception ex)
             {
@@ -294,14 +209,11 @@ namespace Skincare.Services.Implements
         {
             try
             {
-                // Kiểm tra sản phẩm có tồn tại không
-                var existing = await _productRepository.GetProductByIdAsync(id);
-                if (existing == null)
-                {
-                    throw new NotFoundException($"Product with ID {id} not found for delete.");
-                }
-
                 await _productRepository.DeleteProductAsync(id);
+                
+                // Invalidate specific product cache and related caches
+                await _cacheService.RemoveAsync(string.Format(CacheKeys.ProductDetail, id));
+                await InvalidateProductCaches();
             }
             catch (Exception ex)
             {
@@ -314,15 +226,13 @@ namespace Skincare.Services.Implements
         {
             try
             {
-                var result = new List<ProductDto>();
-                foreach (var productId in compareRequestDto.ProductIds)
+                var cacheKey = $"products:compare:{string.Join(":", compareRequestDto.ProductIds.OrderBy(x => x))}";
+                
+                return await _cacheService.GetOrSetAsync(cacheKey, async () =>
                 {
-                    var product = await _productRepository.GetProductByIdAsync(productId);
-                    if (product != null)
-                        result.Add(MapToDto(product));
-                    // Nếu muốn, bạn có thể quăng NotFoundException nếu 1 productId không tồn tại
-                }
-                return result;
+                    var products = await _productRepository.CompareProductsAsync(compareRequestDto);
+                    return products.Select(MapToDto).ToList();
+                }, TimeSpan.FromMinutes(5));
             }
             catch (Exception ex)
             {
@@ -335,49 +245,21 @@ namespace Skincare.Services.Implements
         {
             try
             {
-                var newProduct = new Product
-                {
-                    Name = createProductDto.Name,
-                    Description = createProductDto.Description,
-                    Price = createProductDto.Price,
-                    IsAvailable = createProductDto.IsAvailable,
-                    ProductTypeId = createProductDto.ProductTypeId,
-                    ProductBrandId = createProductDto.ProductBrandId,
-                    Quantity = createProductDto.Quantity,
-                    Stock = createProductDto.Stock ?? createProductDto.Quantity
-                };
-
-                // Handle image upload
-                if (image != null && image.Length > 0)
-                {
-                    string imageUrl = await _fileService.SaveFileAsync(image, "product-images");
-                    newProduct.Image = imageUrl;
-                }
-
-                var createdProduct = await _productRepository.CreateProductAsync(newProduct);
+                await CheckRateLimit("upload");
                 
-                // Add skin type associations if provided
-                if (createProductDto.SkinTypeIds != null && createProductDto.SkinTypeIds.Any())
+                using (await _uploadSemaphore.WaitAsync())
                 {
-                    foreach (var skinTypeId in createProductDto.SkinTypeIds)
-                    {
-                        var productSkinType = new ProductSkinType
-                        {
-                            ProductId = createdProduct.Id,
-                            SkinTypeId = skinTypeId
-                        };
-                        
-                        await _productSkinTypeRepository.CreateAsync(productSkinType);
-                    }
+                    var product = await _productRepository.CreateProductWithImageAsync(createProductDto, image);
+                    
+                    // Invalidate related caches
+                    await InvalidateProductCaches();
+                    
+                    return MapToDto(product);
                 }
-                
-                // Fetch the complete product with all relationships loaded
-                var completeProduct = await _productRepository.GetProductByIdAsync(createdProduct.Id);
-                return MapToDto(completeProduct);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error creating product with image");
+                _logger.LogError(ex, "Error in CreateProductWithImageAsync");
                 throw;
             }
         }
@@ -386,114 +268,22 @@ namespace Skincare.Services.Implements
         {
             try
             {
-                var existingProduct = await _productRepository.GetProductByIdAsync(id);
-                if (existingProduct == null)
-                {
-                    throw new NotFoundException($"Product with ID {id} not found.");
-                }
-
-                _logger.LogInformation($"Updating product {id}. Current image path: {existingProduct.Image}");
-
-                // Update basic information EXCEPT image
-                existingProduct.Name = updateProductDto.Name ?? existingProduct.Name;
-                existingProduct.Description = updateProductDto.Description ?? existingProduct.Description;
-                existingProduct.Price = updateProductDto.Price ?? existingProduct.Price;
-                existingProduct.IsAvailable = updateProductDto.IsAvailable ?? existingProduct.IsAvailable;
-                existingProduct.ProductTypeId = updateProductDto.ProductTypeId ?? existingProduct.ProductTypeId;
-                existingProduct.ProductBrandId = updateProductDto.ProductBrandId ?? existingProduct.ProductBrandId;
+                await CheckRateLimit("upload");
                 
-                // Add quantity and stock updates
-                if (updateProductDto.Quantity.HasValue)
+                using (await _uploadSemaphore.WaitAsync())
                 {
-                    existingProduct.Quantity = updateProductDto.Quantity;
-                    _logger.LogInformation($"Updating quantity to {updateProductDto.Quantity} for product {id}");
-                }
-                
-                if (updateProductDto.Stock.HasValue)
-                {
-                    existingProduct.Stock = updateProductDto.Stock;
-                    _logger.LogInformation($"Updating stock to {updateProductDto.Stock} for product {id}");
-                }
-
-                // Handle image update
-                if (image != null && image.Length > 0)
-                {
-                    _logger.LogInformation($"Processing new image upload for product {id}. File name: {image.FileName}");
+                    var product = await _productRepository.UpdateProductWithImageAsync(id, updateProductDto, image);
                     
-                    // Save new image first
-                    string newImageUrl = await _fileService.SaveFileAsync(image, "product-images");
-                    if (!string.IsNullOrEmpty(newImageUrl))
-                    {
-                        _logger.LogInformation($"New image saved successfully: {newImageUrl}");
-                        
-                        // Store old image path for deletion
-                        string oldImagePath = existingProduct.Image;
-                        _logger.LogInformation($"Old image path: {oldImagePath}");
-                        
-                        // Update product with new image path
-                        existingProduct.Image = newImageUrl;
-                        _logger.LogInformation($"Updated product image path to: {existingProduct.Image}");
-
-                        // Delete old image after successful save and path update
-                        if (!string.IsNullOrEmpty(oldImagePath))
-                        {
-                            _logger.LogInformation($"Attempting to delete old image: {oldImagePath}");
-                            if (_fileService.DeleteFile(oldImagePath.TrimStart('/')))
-                            {
-                                _logger.LogInformation($"Successfully deleted old image: {oldImagePath}");
-                            }
-                            else
-                            {
-                                _logger.LogWarning($"Failed to delete old image: {oldImagePath}");
-                            }
-                        }
-                    }
-                    else
-                    {
-                        _logger.LogError("Failed to save new image. Keeping existing image path.");
-                    }
-                }
-                else
-                {
-                    _logger.LogInformation($"No new image file provided for product {id}. Keeping existing image path: {existingProduct.Image}");
-                }
-
-                // Update the product in database
-                var updatedProduct = await _productRepository.UpdateProductAsync(existingProduct);
-                _logger.LogInformation($"Product {id} updated in database with final image path: {updatedProduct.Image}");
-                
-                // Update skin types if provided
-                if (updateProductDto.SkinTypeIds != null)
-                {
-                    // Get current skin types
-                    var currentSkinTypes = await _productSkinTypeRepository.GetByProductIdAsync(id);
+                    // Invalidate specific product cache and related caches
+                    await _cacheService.RemoveAsync(string.Format(CacheKeys.ProductDetail, id));
+                    await InvalidateProductCaches();
                     
-                    // Delete all existing associations
-                    foreach (var pst in currentSkinTypes)
-                    {
-                        await _productSkinTypeRepository.DeleteAsync(pst.Id);
-                    }
-                    
-                    // Create new ones
-                    foreach (var skinTypeId in updateProductDto.SkinTypeIds)
-                    {
-                        var productSkinType = new ProductSkinType
-                        {
-                            ProductId = id,
-                            SkinTypeId = skinTypeId
-                        };
-                        
-                        await _productSkinTypeRepository.CreateAsync(productSkinType);
-                    }
+                    return MapToDto(product);
                 }
-                
-                // Fetch the complete updated product with all relations
-                var completeProduct = await _productRepository.GetProductByIdAsync(id);
-                return MapToDto(completeProduct);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error updating product with ID {id}: {ex.Message}");
+                _logger.LogError(ex, $"Error in UpdateProductWithImageAsync for ID {id}");
                 throw;
             }
         }
@@ -502,139 +292,74 @@ namespace Skincare.Services.Implements
         {
             try
             {
-                if (string.IsNullOrEmpty(imageUrl))
+                if (!string.IsNullOrEmpty(imageUrl))
                 {
-                    return;
-                }
-                
-                // Handle based on URL pattern
-                if (imageUrl.StartsWith("/product-images/"))
-                {
-                    // Local storage image
-                    _fileService.DeleteFile(imageUrl);
-                    _logger.LogInformation($"Deleted local image: {imageUrl}");
-                }
-                else if (imageUrl.Contains("drive.google.com"))
-                {
-                    // Skip for now to avoid dependency on GoogleDriveService
-                    _logger.LogInformation($"Skipped deletion of Google Drive image: {imageUrl}");
+                    await _fileService.DeleteFileAsync(imageUrl);
+                    _logger.LogInformation($"Deleted product image: {imageUrl}");
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error deleting product image: {ex.Message}");
-                // Don't throw here to avoid disrupting the main flow
+                _logger.LogError(ex, $"Error deleting product image: {imageUrl}");
+                // Don't throw here as it's not critical for the main operation
             }
         }
 
-        // Phương thức kiểm tra rate limit
         private async Task CheckRateLimit(string operation)
         {
-            string key = $"{operation}";
+            var key = $"rate_limit:{operation}";
+            var now = DateTime.UtcNow;
             
             lock (_lastUploadTime)
             {
                 if (_lastUploadTime.ContainsKey(key))
                 {
-                    // Kiểm tra thời gian giữa các lần upload (ít nhất 1 giây)
-                    TimeSpan timeSinceLastUpload = DateTime.UtcNow - _lastUploadTime[key];
-                    if (timeSinceLastUpload.TotalSeconds < 1)
+                    var timeSinceLastUpload = now - _lastUploadTime[key];
+                    if (timeSinceLastUpload.TotalSeconds < 1) // 1 second minimum between uploads
                     {
-                        throw new InvalidOperationException("Thao tác quá nhanh. Vui lòng thử lại sau.");
+                        throw new InvalidOperationException($"Rate limit exceeded for {operation}. Please wait before trying again.");
                     }
-                    _lastUploadTime[key] = DateTime.UtcNow;
                 }
-                else
-                {
-                    _lastUploadTime[key] = DateTime.UtcNow;
-                }
+                _lastUploadTime[key] = now;
             }
-            
-            // Thêm delay nhỏ để đảm bảo không có quá nhiều request cùng lúc
-            await Task.Delay(100);
         }
 
         public async Task<IEnumerable<ProductDto>> GetProductsBySkinTypeAsync(int skinTypeId)
         {
             try
             {
-                var products = await _productRepository.GetProductsBySkinTypeAsync(skinTypeId);
-                return products.Select(MapToDto).ToList();
+                var cacheKey = $"products:skintype:{skinTypeId}";
+                
+                return await _cacheService.GetOrSetAsync(cacheKey, async () =>
+                {
+                    var products = await _productRepository.GetProductsBySkinTypeAsync(skinTypeId);
+                    return products.Select(MapToDto).ToList();
+                }, TimeSpan.FromMinutes(15));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error in GetProductsBySkinTypeAsync for skin type {skinTypeId}");
+                _logger.LogError(ex, $"Error in GetProductsBySkinTypeAsync for skinTypeId {skinTypeId}");
                 throw;
             }
         }
 
         private ProductDto MapToDto(Product product)
         {
-            if (product == null)
+            return new ProductDto
             {
-                _logger.LogWarning("Attempted to map null product to DTO");
-                throw new ArgumentNullException(nameof(product));
-            }
-            
-            try
-            {
-                string imageUrl = product.Image;
-                if (!string.IsNullOrEmpty(imageUrl))
-                {
-                    // Đảm bảo đường dẫn ảnh bắt đầu bằng "/"
-                    if (!imageUrl.StartsWith("/"))
-                    {
-                        imageUrl = "/" + imageUrl;
-                    }
-                }
-
-                // Calculate average rating and reviews count
-                decimal? averageRating = null;
-                int reviewsCount = 0;
-                
-                if (product.Reviews != null && product.Reviews.Any())
-                {
-                    reviewsCount = product.Reviews.Count;
-                    var validRatings = product.Reviews.Where(r => r.Rating.HasValue).Select(r => r.Rating.Value);
-                    
-                    if (validRatings.Any())
-                    {
-                        averageRating = Math.Round((decimal)validRatings.Average(), 1);
-                    }
-                }
-
-                return new ProductDto
-                {
-                    Id = product.Id,
-                    Name = product.Name ?? "",
-                    Description = product.Description ?? "",
-                    Price = product.Price,
-                    Image = imageUrl ?? "",
-                    IsAvailable = product.IsAvailable,
-                    ProductTypeId = product.ProductTypeId,
-                    ProductTypeName = product.ProductType?.Name ?? "Unknown Type",
-                    ProductBrandId = product.ProductBrandId,
-                    ProductBrandName = product.ProductBrand?.Name ?? "Unknown Brand",
-                    Quantity = product.Quantity,
-                    Stock = product.Stock,
-                    InventoryId = product.Inventory?.Id,
-                    BranchId = product.Inventory?.BranchId,
-                    SkinTypes = product.ProductSkinTypes?
-                        .Where(pst => pst.SkinType != null)
-                        .Select(pst => pst.SkinType.Name)
-                        .ToList() ?? new List<string>(),
-                    SkinTypeIds = product.ProductSkinTypes?
-                        .Select(pst => pst.SkinTypeId)
-                        .ToList() ?? new List<int>(),
-                    AverageRating = averageRating,
-                    ReviewsCount = reviewsCount
-                };
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error mapping product {product.Id} to DTO: {ex.Message}");
-                throw;
-            }
+                Id = product.Id,
+                Name = product.Name,
+                Description = product.Description,
+                Price = product.Price,
+                ImageUrl = product.ImageUrl,
+                ProductTypeId = product.ProductTypeId,
+                ProductTypeName = product.ProductType?.Name,
+                BranchId = product.BranchId,
+                BranchName = product.Branch?.Name,
+                Status = product.Status,
+                CreatedAt = product.CreatedAt,
+                UpdatedAt = product.UpdatedAt
+            };
         }
 
         public async Task<(IEnumerable<ProductDto> Products, int TotalPages, int TotalItems)> GetProductsWithFiltersAsync(
@@ -645,93 +370,68 @@ namespace Skincare.Services.Implements
             int? branchId = null,
             decimal? minPrice = null, 
             decimal? maxPrice = null, 
-            decimal? minRating = null,
-            decimal? maxRating = null,
+            decimal? minRating = null, 
+            decimal? maxRating = null, 
             string sortBy = null)
         {
             try
             {
-                _logger.LogInformation($"Filtering products with: skinTypeId={skinTypeId}, productTypeId={productTypeId}, " +
-                    $"branchId={branchId}, priceRange={minPrice}-{maxPrice}, ratingRange={minRating}-{maxRating}, sortBy={sortBy}");
+                var cacheKey = $"products:filtered:{pageNumber}:{pageSize}:{skinTypeId}:{productTypeId}:{branchId}:{minPrice}:{maxPrice}:{minRating}:{maxRating}:{sortBy}";
                 
-                // Get initial query from repository
-                var query = await _productRepository.GetFilteredProductsQueryAsync(
-                    skinTypeId, productTypeId, branchId, minPrice, maxPrice);
-                
-                 // Kiểm tra nếu sắp xếp theo rating
-                bool isSortingByRating = !string.IsNullOrEmpty(sortBy) && 
-                    (sortBy.ToLower() == "rating_asc" || sortBy.ToLower() == "rating_desc");
-                
-                string nonRatingSortBy = isSortingByRating ? null : sortBy;
-                
-                // Apply sorting nếu không phải sắp xếp theo rating
-                if (!string.IsNullOrEmpty(nonRatingSortBy))
+                return await _cacheService.GetOrSetAsync(cacheKey, async () =>
                 {
-                    query = ApplySorting(query, nonRatingSortBy);
-                }
-                
-                // Get total count for pagination
-                int totalCount = await _productRepository.GetCountFromQueryAsync(query);
-                
-                // Apply pagination
-                var paginatedProducts = await _productRepository.GetPaginatedProductsFromQueryAsync(
-                    query, pageNumber, pageSize);
-                
-                // Map to DTOs
-                var productDtos = paginatedProducts.Select(p => MapToDto(p)).ToList();
-                
-                // Declare pagination variables
-                decimal calculatedPages;
-                int totalPages;
-                
-                // Xử lý sắp xếp theo rating sau khi chuyển đổi thành DTO
-                if (isSortingByRating)
-                {
-                    if (sortBy.ToLower() == "rating_asc")
+                    var query = _productRepository.GetProductsQuery();
+
+                    // Apply filters
+                    if (skinTypeId.HasValue)
                     {
-                        productDtos = productDtos
-                            .OrderBy(p => p.AverageRating ?? 0)
-                            .ToList();
+                        query = query.Where(p => p.ProductSkinTypes.Any(pst => pst.SkinTypeId == skinTypeId.Value));
                     }
-                    else // rating_desc
+
+                    if (productTypeId.HasValue)
                     {
-                        productDtos = productDtos
-                            .OrderByDescending(p => p.AverageRating ?? 0)
-                            .ToList();
+                        query = query.Where(p => p.ProductTypeId == productTypeId.Value);
                     }
-                }
-                
-                // Filter by rating if specified (this is done after mapping since rating is calculated in the DTO)
-                if (minRating.HasValue || maxRating.HasValue)
-                {
-                    _logger.LogInformation($"Filtering by rating range: {minRating} - {maxRating}");
-                    productDtos = productDtos
-                        .Where(p => (!minRating.HasValue || (p.AverageRating.HasValue && p.AverageRating >= minRating)) &&
-                                   (!maxRating.HasValue || (p.AverageRating.HasValue && p.AverageRating <= maxRating)))
-                        .ToList();
-                    
-                    // Recalculate pagination info for filtered results
-                    totalCount = productDtos.Count;
-                    calculatedPages = (decimal)totalCount / pageSize;
-                    totalPages = (int)Math.Ceiling(calculatedPages);
-                    
-                    // Apply pagination again after rating filter
-                    productDtos = productDtos
-                        .Skip((pageNumber - 1) * pageSize)
-                        .Take(pageSize)
-                        .ToList();
-                }
-                else
-                {
-                    // Calculate pagination info for non-rating filtered results
-                    calculatedPages = (decimal)totalCount / pageSize;
-                    totalPages = (int)Math.Ceiling(calculatedPages);
-                }
-                
-                _logger.LogInformation($"Retrieved {productDtos.Count} filtered products. " +
-                    $"Total: {totalCount}, Pages: {totalPages}");
-                
-                return (productDtos, totalPages, totalCount);
+
+                    if (branchId.HasValue)
+                    {
+                        query = query.Where(p => p.BranchId == branchId.Value);
+                    }
+
+                    if (minPrice.HasValue)
+                    {
+                        query = query.Where(p => p.Price >= minPrice.Value);
+                    }
+
+                    if (maxPrice.HasValue)
+                    {
+                        query = query.Where(p => p.Price <= maxPrice.Value);
+                    }
+
+                    if (minRating.HasValue)
+                    {
+                        query = query.Where(p => p.Reviews.Any() && p.Reviews.Average(r => r.Rating) >= minRating.Value);
+                    }
+
+                    if (maxRating.HasValue)
+                    {
+                        query = query.Where(p => p.Reviews.Any() && p.Reviews.Average(r => r.Rating) <= maxRating.Value);
+                    }
+
+                    // Apply sorting
+                    if (!string.IsNullOrEmpty(sortBy))
+                    {
+                        query = ApplySorting(query, sortBy);
+                    }
+
+                    var totalCount = await _productRepository.GetCountAsync(query);
+                    var products = await _productRepository.GetPaginatedAsync(query, pageNumber, pageSize);
+
+                    var dtos = products.Select(MapToDto).ToList();
+                    var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+
+                    return (dtos, totalPages, totalCount);
+                }, TimeSpan.FromMinutes(15));
             }
             catch (Exception ex)
             {
@@ -742,19 +442,16 @@ namespace Skincare.Services.Implements
 
         private IQueryable<Product> ApplySorting(IQueryable<Product> query, string sortBy)
         {
-            switch (sortBy.ToLower())
+            return sortBy.ToLower() switch
             {
-                case "price_asc":
-                    return query.OrderBy(p => p.Price);
-                case "price_desc":
-                    return query.OrderByDescending(p => p.Price);
-                case "name_asc":
-                    return query.OrderBy(p => p.Name);
-                case "name_desc":
-                    return query.OrderByDescending(p => p.Name);
-                default:
-                    return query;
-            }
+                "name" => query.OrderBy(p => p.Name),
+                "name_desc" => query.OrderByDescending(p => p.Name),
+                "price" => query.OrderBy(p => p.Price),
+                "price_desc" => query.OrderByDescending(p => p.Price),
+                "created" => query.OrderBy(p => p.CreatedAt),
+                "created_desc" => query.OrderByDescending(p => p.CreatedAt),
+                _ => query.OrderBy(p => p.Name)
+            };
         }
 
         public async Task<(IEnumerable<ProductDto> Products, int TotalPages, int TotalItems)> GetProductsByTypeWithPaginationAsync(
@@ -764,25 +461,20 @@ namespace Skincare.Services.Implements
         {
             try
             {
-                _logger.LogInformation($"Getting products by type {productTypeId} with pagination: page {pageNumber}, size {pageSize}");
+                var cacheKey = $"products:type:{productTypeId}:{pageNumber}:{pageSize}";
                 
-                var (products, totalCount) = await _productRepository.GetProductsByTypeWithPaginationAsync(
-                    productTypeId, pageNumber, pageSize);
-                
-                // Fix method group conversion
-                var productDtos = products.Select(p => MapToDto(p)).ToList();
-                
-                decimal calculatedPages = (decimal)totalCount / pageSize;
-                int totalPages = (int)Math.Ceiling(calculatedPages);
-                
-                _logger.LogInformation($"Retrieved {productDtos.Count} products by type {productTypeId}. " +
-                    $"Total: {totalCount}, Pages: {totalPages}");
-                
-                return (productDtos, totalPages, totalCount);
+                return await _cacheService.GetOrSetAsync(cacheKey, async () =>
+                {
+                    var (products, totalCount) = await _productRepository.GetProductsByTypeWithPaginationAsync(productTypeId, pageNumber, pageSize);
+                    var dtos = products.Select(MapToDto).ToList();
+                    var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+                    
+                    return (dtos, totalPages, totalCount);
+                }, TimeSpan.FromMinutes(15));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error in GetProductsByTypeWithPaginationAsync for type {productTypeId}");
+                _logger.LogError(ex, $"Error in GetProductsByTypeWithPaginationAsync for productTypeId {productTypeId}");
                 throw;
             }
         }
@@ -794,25 +486,20 @@ namespace Skincare.Services.Implements
         {
             try
             {
-                _logger.LogInformation($"Getting products by branch {branchId} with pagination: page {pageNumber}, size {pageSize}");
+                var cacheKey = $"products:branch:{branchId}:{pageNumber}:{pageSize}";
                 
-                var (products, totalCount) = await _productRepository.GetProductsByBranchWithPaginationAsync(
-                    branchId, pageNumber, pageSize);
-                
-                // Fix method group conversion
-                var productDtos = products.Select(p => MapToDto(p)).ToList();
-                
-                decimal calculatedPages = (decimal)totalCount / pageSize;
-                int totalPages = (int)Math.Ceiling(calculatedPages);
-                
-                _logger.LogInformation($"Retrieved {productDtos.Count} products by branch {branchId}. " +
-                    $"Total: {totalCount}, Pages: {totalPages}");
-                
-                return (productDtos, totalPages, totalCount);
+                return await _cacheService.GetOrSetAsync(cacheKey, async () =>
+                {
+                    var (products, totalCount) = await _productRepository.GetProductsByBranchWithPaginationAsync(branchId, pageNumber, pageSize);
+                    var dtos = products.Select(MapToDto).ToList();
+                    var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+                    
+                    return (dtos, totalPages, totalCount);
+                }, TimeSpan.FromMinutes(15));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error in GetProductsByBranchWithPaginationAsync for branch {branchId}");
+                _logger.LogError(ex, $"Error in GetProductsByBranchWithPaginationAsync for branchId {branchId}");
                 throw;
             }
         }
@@ -824,26 +511,182 @@ namespace Skincare.Services.Implements
         {
             try
             {
-                _logger.LogInformation($"Getting products by skin type {skinTypeId} with pagination: page {pageNumber}, size {pageSize}");
+                var cacheKey = $"products:skintype:{skinTypeId}:{pageNumber}:{pageSize}";
                 
-                var (products, totalCount) = await _productRepository.GetProductsBySkinTypeWithPaginationAsync(
-                    skinTypeId, pageNumber, pageSize);
-                
-                // Fix method group conversion
-                var productDtos = products.Select(p => MapToDto(p)).ToList();
-                
-                decimal calculatedPages = (decimal)totalCount / pageSize;
-                int totalPages = (int)Math.Ceiling(calculatedPages);
-                
-                _logger.LogInformation($"Retrieved {productDtos.Count} products by skin type {skinTypeId}. " +
-                    $"Total: {totalCount}, Pages: {totalPages}");
-                
-                return (productDtos, totalPages, totalCount);
+                return await _cacheService.GetOrSetAsync(cacheKey, async () =>
+                {
+                    var (products, totalCount) = await _productRepository.GetProductsBySkinTypeWithPaginationAsync(skinTypeId, pageNumber, pageSize);
+                    var dtos = products.Select(MapToDto).ToList();
+                    var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+                    
+                    return (dtos, totalPages, totalCount);
+                }, TimeSpan.FromMinutes(15));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error in GetProductsBySkinTypeWithPaginationAsync for skin type {skinTypeId}");
+                _logger.LogError(ex, $"Error in GetProductsBySkinTypeWithPaginationAsync for skinTypeId {skinTypeId}");
                 throw;
+            }
+        }
+
+        public async Task<(IEnumerable<ProductDto> Products, int TotalPages, int TotalItems)> AdvancedSearchAsync(AdvancedSearchDto searchDto)
+        {
+            try
+            {
+                _logger.LogInformation($"Advanced search with criteria: {JsonSerializer.Serialize(searchDto)}");
+
+                // Build query based on search criteria
+                var query = _productRepository.GetAllProductsQueryable();
+
+                // Apply keyword search
+                if (!string.IsNullOrWhiteSpace(searchDto.Keyword))
+                {
+                    var keyword = searchDto.Keyword.ToLower();
+                    query = query.Where(p => p.Name.ToLower().Contains(keyword) || 
+                                           p.Description.ToLower().Contains(keyword) ||
+                                           p.Brand.ToLower().Contains(keyword));
+                }
+
+                // Apply category filter
+                if (searchDto.CategoryIds != null && searchDto.CategoryIds.Any())
+                {
+                    query = query.Where(p => searchDto.CategoryIds.Contains(p.ProductTypeId));
+                }
+
+                // Apply brand filter
+                if (searchDto.BrandIds != null && searchDto.BrandIds.Any())
+                {
+                    // Assuming BrandId is available in Product entity
+                    // query = query.Where(p => searchDto.BrandIds.Contains(p.BrandId));
+                }
+
+                // Apply skin type filter
+                if (searchDto.SkinTypeIds != null && searchDto.SkinTypeIds.Any())
+                {
+                    query = query.Where(p => p.ProductSkinTypes.Any(pst => searchDto.SkinTypeIds.Contains(pst.SkinTypeId)));
+                }
+
+                // Apply price range filter
+                if (searchDto.MinPrice.HasValue)
+                {
+                    query = query.Where(p => p.Price >= searchDto.MinPrice.Value);
+                }
+
+                if (searchDto.MaxPrice.HasValue)
+                {
+                    query = query.Where(p => p.Price <= searchDto.MaxPrice.Value);
+                }
+
+                // Apply rating filter
+                if (searchDto.MinRating.HasValue)
+                {
+                    query = query.Where(p => p.Reviews.Any() && p.Reviews.Average(r => r.Rating) >= searchDto.MinRating.Value);
+                }
+
+                // Apply stock filter
+                if (searchDto.InStock.HasValue && searchDto.InStock.Value)
+                {
+                    query = query.Where(p => p.Inventories.Any(i => i.Quantity > 0));
+                }
+
+                // Apply organic filter
+                if (searchDto.IsOrganic.HasValue)
+                {
+                    // Assuming IsOrganic property exists
+                    // query = query.Where(p => p.IsOrganic == searchDto.IsOrganic.Value);
+                }
+
+                // Apply cruelty-free filter
+                if (searchDto.IsCrueltyFree.HasValue)
+                {
+                    // Assuming IsCrueltyFree property exists
+                    // query = query.Where(p => p.IsCrueltyFree == searchDto.IsCrueltyFree.Value);
+                }
+
+                // Apply size filter
+                if (!string.IsNullOrWhiteSpace(searchDto.Size))
+                {
+                    // Assuming Size property exists
+                    // query = query.Where(p => p.Size == searchDto.Size);
+                }
+
+                // Apply brand filter
+                if (!string.IsNullOrWhiteSpace(searchDto.Brand))
+                {
+                    // Assuming Brand property exists
+                    // query = query.Where(p => p.Brand == searchDto.Brand);
+                }
+
+                // Apply sorting
+                query = ApplyAdvancedSorting(query, searchDto.SortBy, searchDto.SortOrder);
+
+                // Get total count before pagination
+                var totalItems = await query.CountAsync();
+
+                // Apply pagination
+                var products = await query
+                    .Skip((searchDto.PageNumber - 1) * searchDto.PageSize)
+                    .Take(searchDto.PageSize)
+                    .ToListAsync();
+
+                // Map to DTOs
+                var dtos = new List<ProductDto>();
+                foreach (var product in products)
+                {
+                    try
+                    {
+                        dtos.Add(MapToDto(product));
+                    }
+                    catch (Exception mapEx)
+                    {
+                        _logger.LogError(mapEx, $"Error mapping product {product.Id}: {mapEx.Message}");
+                    }
+                }
+
+                // Calculate total pages
+                decimal calculatedPages = (decimal)totalItems / searchDto.PageSize;
+                int totalPages = (int)Math.Ceiling(calculatedPages);
+
+                _logger.LogInformation($"Advanced search completed: {dtos.Count} products found, {totalPages} pages");
+
+                return (dtos, totalPages, totalItems);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in AdvancedSearchAsync: {ErrorMessage}", ex.Message);
+                throw;
+            }
+        }
+
+        private IQueryable<Product> ApplyAdvancedSorting(IQueryable<Product> query, string sortBy, string sortOrder)
+        {
+            var isDescending = sortOrder?.ToLower() == "desc";
+
+            return sortBy?.ToLower() switch
+            {
+                "name" => isDescending ? query.OrderByDescending(p => p.Name) : query.OrderBy(p => p.Name),
+                "price" => isDescending ? query.OrderByDescending(p => p.Price) : query.OrderBy(p => p.Price),
+                "rating" => isDescending 
+                    ? query.OrderByDescending(p => p.Reviews.Average(r => r.Rating))
+                    : query.OrderBy(p => p.Reviews.Average(r => r.Rating)),
+                "created" => isDescending ? query.OrderByDescending(p => p.CreatedAt) : query.OrderBy(p => p.CreatedAt),
+                "popularity" => isDescending 
+                    ? query.OrderByDescending(p => p.Reviews.Count)
+                    : query.OrderBy(p => p.Reviews.Count),
+                _ => query.OrderBy(p => p.Name) // Default sorting
+            };
+        }
+
+        private async Task InvalidateProductCaches()
+        {
+            try
+            {
+                await _cacheService.RemoveByPatternAsync(CacheKeys.ProductPattern);
+                _logger.LogInformation("Invalidated all product caches");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error invalidating product caches");
             }
         }
     }

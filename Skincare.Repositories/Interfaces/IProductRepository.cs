@@ -51,5 +51,7 @@ namespace Skincare.Repositories.Interfaces
             int skinTypeId, 
             int pageNumber, 
             int pageSize);
+
+        IQueryable<Product> GetAllProductsQueryable();
     }
 }
