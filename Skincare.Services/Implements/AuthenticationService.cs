@@ -9,6 +9,7 @@ using Skincare.Services.Interfaces;
 using System;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
@@ -47,14 +48,24 @@ namespace Skincare.Services.Implements
                 }
 
                 var token = GenerateJwtToken(account);
+                var refreshToken = GenerateRefreshToken();
+                var refreshTokenExpiry = DateTime.UtcNow.AddDays(int.Parse(_configuration["Jwt:RefreshTokenExpirationDays"]));
+
+                // Update account with refresh token
+                account.RefreshToken = refreshToken;
+                account.RefreshTokenExpiry = refreshTokenExpiry;
+                await _accountRepository.UpdateAccountAsync(account);
+
                 _logger.LogInformation("Login successful for {Email}, userId: {UserId}", loginRequest.Email, account.Id);
 
                 return new LoginResponse
                 {
                     Token = token,
+                    RefreshToken = refreshToken,
                     Role = account.Role,
                     Username = account.Username,
-                    Expiration = DateTime.UtcNow.AddHours(24),
+                    Expiration = DateTime.UtcNow.AddMinutes(int.Parse(_configuration["Jwt:AccessTokenExpirationMinutes"])),
+                    RefreshTokenExpiration = refreshTokenExpiry,
                     Message = "Login successful",
                     Id = account.Id,
                     Email = account.Email,
@@ -90,6 +101,8 @@ namespace Skincare.Services.Implements
                 }
 
                 var passwordHash = BCrypt.Net.BCrypt.HashPassword(registerRequest.Password);
+                var refreshToken = GenerateRefreshToken();
+                var refreshTokenExpiry = DateTime.UtcNow.AddDays(int.Parse(_configuration["Jwt:RefreshTokenExpirationDays"]));
 
                 var newAccount = new Account
                 {
@@ -101,7 +114,9 @@ namespace Skincare.Services.Implements
                     PhoneNumber = registerRequest.PhoneNumber,
                     Address = registerRequest.Address,
                     Avatar = registerRequest.Avatar,
-                    Status = "active"
+                    Status = "active",
+                    RefreshToken = refreshToken,
+                    RefreshTokenExpiry = refreshTokenExpiry
                 };
 
                 await _accountRepository.CreateAccountAsync(newAccount);
@@ -112,9 +127,11 @@ namespace Skincare.Services.Implements
                 return new LoginResponse
                 {
                     Token = token,
+                    RefreshToken = refreshToken,
                     Role = newAccount.Role,
                     Username = newAccount.Username,
-                    Expiration = DateTime.UtcNow.AddHours(24),
+                    Expiration = DateTime.UtcNow.AddMinutes(int.Parse(_configuration["Jwt:AccessTokenExpirationMinutes"])),
+                    RefreshTokenExpiration = refreshTokenExpiry,
                     Message = "Registration successful",
                     Id = newAccount.Id,
                     Email = newAccount.Email,
@@ -130,6 +147,75 @@ namespace Skincare.Services.Implements
             }
         }
 
+        public async Task<LoginResponse> RefreshTokenAsync(string refreshToken)
+        {
+            try
+            {
+                var account = await _accountRepository.GetByRefreshTokenAsync(refreshToken);
+                if (account == null || account.RefreshTokenExpiry <= DateTime.UtcNow)
+                {
+                    _logger.LogWarning("Invalid or expired refresh token");
+                    return null;
+                }
+
+                var newToken = GenerateJwtToken(account);
+                var newRefreshToken = GenerateRefreshToken();
+                var newRefreshTokenExpiry = DateTime.UtcNow.AddDays(int.Parse(_configuration["Jwt:RefreshTokenExpirationDays"]));
+
+                // Update account with new refresh token
+                account.RefreshToken = newRefreshToken;
+                account.RefreshTokenExpiry = newRefreshTokenExpiry;
+                await _accountRepository.UpdateAccountAsync(account);
+
+                _logger.LogInformation("Token refreshed successfully for userId: {UserId}", account.Id);
+
+                return new LoginResponse
+                {
+                    Token = newToken,
+                    RefreshToken = newRefreshToken,
+                    Role = account.Role,
+                    Username = account.Username,
+                    Expiration = DateTime.UtcNow.AddMinutes(int.Parse(_configuration["Jwt:AccessTokenExpirationMinutes"])),
+                    RefreshTokenExpiration = newRefreshTokenExpiry,
+                    Message = "Token refreshed successfully",
+                    Id = account.Id,
+                    Email = account.Email,
+                    Avatar = account.Avatar,
+                    PhoneNumber = account.PhoneNumber,
+                    Address = account.Address
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error refreshing token");
+                throw;
+            }
+        }
+
+        public async Task<bool> RevokeRefreshTokenAsync(int userId)
+        {
+            try
+            {
+                var account = await _accountRepository.GetByIdAsync(userId);
+                if (account == null)
+                {
+                    return false;
+                }
+
+                account.RefreshToken = null;
+                account.RefreshTokenExpiry = null;
+                await _accountRepository.UpdateAccountAsync(account);
+
+                _logger.LogInformation("Refresh token revoked for userId: {UserId}", userId);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error revoking refresh token for userId: {UserId}", userId);
+                throw;
+            }
+        }
+
         public string GenerateJwtToken(Account account)
         {
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]));
@@ -137,6 +223,7 @@ namespace Skincare.Services.Implements
 
             var claims = new[]
             {
+                new Claim("UserId", account.Id.ToString()),
                 new Claim(ClaimTypes.NameIdentifier, account.Id.ToString()),
                 new Claim(ClaimTypes.Email, account.Email),
                 new Claim(ClaimTypes.Name, account.Username),
@@ -147,11 +234,19 @@ namespace Skincare.Services.Implements
                 issuer: _configuration["Jwt:Issuer"],
                 audience: _configuration["Jwt:Audience"],
                 claims: claims,
-                expires: DateTime.UtcNow.AddHours(24),
+                expires: DateTime.UtcNow.AddMinutes(int.Parse(_configuration["Jwt:AccessTokenExpirationMinutes"])),
                 signingCredentials: credentials
             );
 
             return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+
+        public string GenerateRefreshToken()
+        {
+            var randomNumber = new byte[64];
+            using var rng = RandomNumberGenerator.Create();
+            rng.GetBytes(randomNumber);
+            return Convert.ToBase64String(randomNumber);
         }
 
         public async Task<string?> UploadAvatarForRegistration(IFormFile? avatar)

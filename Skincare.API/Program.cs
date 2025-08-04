@@ -1,262 +1,276 @@
 using Microsoft.EntityFrameworkCore;
-using Skincare.Repositories.Context;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Swashbuckle.AspNetCore.Filters;
-using Microsoft.IdentityModel.Tokens;
-using System.Text;
-using Skincare.API.Middleware;
-using System.Text.Json.Serialization;
 using Skincare.API.Configurations;
-using Microsoft.OpenApi.Models;
+using Skincare.API.Middleware;
+using Skincare.Repositories.Context;
+using Skincare.Services.Interfaces;
 using Skincare.Services.Implements;
-using System.IO;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.SignalR;
+using Skincare.Services.Implements;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Serilog;
+using Swashbuckle.AspNetCore.Filters;
+using Microsoft.OpenApi.Models;
+using System.Reflection;
 
-namespace Skincare.API
-{
-    public class Program
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services to the container.
+builder.Services.AddControllers()
+    .AddNewtonsoftJson(options =>
     {
-        public static void Main(string[] args)
+        options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore;
+        options.SerializerSettings.NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore;
+        options.SerializerSettings.DateFormatString = "yyyy-MM-ddTHH:mm:ssZ";
+    });
+
+// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+builder.Services.AddEndpointsApiExplorer();
+
+// Enhanced Swagger Configuration
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "Skincare Store API",
+        Version = "v1",
+        Description = "Comprehensive API for Skincare Store e-commerce platform",
+        Contact = new OpenApiContact
         {
-            var builder = WebApplication.CreateBuilder(args);
-
-            // Đọc chuỗi kết nối từ appsettings.json
-            var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-
-            // Add logging
-            builder.Logging.ClearProviders();
-            builder.Logging.AddConsole();
-            builder.Logging.AddDebug();
-
-            // Set the content root path for the application
-            builder.Environment.ContentRootPath = Directory.GetCurrentDirectory();
-            Console.WriteLine($"Content Root Path: {builder.Environment.ContentRootPath}");
-
-            // Verify credential file exists
-            var uploadPath = Path.Combine(builder.Environment.ContentRootPath,
-                builder.Configuration["FileSettings:UploadPath"]);
-            var avatarFolder = Path.Combine(uploadPath,
-                            builder.Configuration["FileSettings:AvatarFolder"]);
-            var productFolder = Path.Combine(uploadPath,
-                            builder.Configuration["FileSettings:ProductFolder"]);
-
-            Console.WriteLine($"Checking upload path: {uploadPath}");
-            if (!Directory.Exists(uploadPath))
-            {
-                Console.WriteLine("Upload path does not exist. Creating...");
-                Directory.CreateDirectory(uploadPath);
-            }
-            Console.WriteLine("Upload path is ready.");
-
-
-            // Cấu hình các dịch vụ
-            ConfigureServices(builder.Services, connectionString, builder.Configuration);
-
-            var app = builder.Build();
-
-            // Cấu hình middleware
-            ConfigureMiddleware(app);
-
-            // Chạy ứng dụng
-            app.Run();
+            Name = "API Support",
+            Email = "support@skincare.com",
+            Url = new Uri("https://skincare.com/support")
+        },
+        License = new OpenApiLicense
+        {
+            Name = "MIT",
+            Url = new Uri("https://opensource.org/licenses/MIT")
         }
+    });
 
-        private static void ConfigureServices(IServiceCollection services, string connectionString, IConfiguration configuration)
+    options.SwaggerDoc("v2", new OpenApiInfo
+    {
+        Title = "Skincare Store API",
+        Version = "v2",
+        Description = "Enhanced API with advanced features including search, analytics, and notifications",
+        Contact = new OpenApiContact
         {
-            // Cấu hình DbContext
-            services.AddDbContext<SWP391Context>(options =>
-                options.UseSqlServer(connectionString));
-
-            // Add Response Caching services
-            services.AddResponseCaching();
-
-            // Register LocalFileService before other services
-            services.AddSingleton<FileService>();
-
-            // Đăng ký Repository và Service
-            services.AddServices();
-
-            // Memory Cache for Products
-            services.AddMemoryCache();
-
-            // Đọc cấu hình JWT từ appsettings.json
-            var jwtSettings = configuration.GetSection("Jwt");
-            var jwtKey = jwtSettings["Key"];
-            var jwtIssuer = jwtSettings["Issuer"];
-            var jwtAudience = jwtSettings["Audience"];
-
-            // ✅ Thêm Authentication (JWT)
-            services.AddAuthentication(options =>
-            {
-                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-            })
-            .AddJwtBearer(options =>
-            {
-                options.TokenValidationParameters = new TokenValidationParameters
-                {
-                    ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
-                    ValidateIssuer = true,
-                    ValidateAudience = true,
-                    ValidIssuer = jwtIssuer,
-                    ValidAudience = jwtAudience,
-                    ValidateLifetime = true,
-                    ClockSkew = TimeSpan.Zero // Không cho phép thời gian trễ
-                };
-            });
-
-            // Đăng ký Controllers và Swagger với cấu hình JSON
-            services.AddControllers().AddJsonOptions(options =>
-            {
-                options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
-                options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
-            });
-
-            services.AddEndpointsApiExplorer();
-
-            // ✅ Cấu hình Swagger với Bearer Token
-            services.AddSwaggerGen(options =>
-            {
-                options.SwaggerDoc("v1", new OpenApiInfo
-                {
-                    Title = "Skincare API",
-                    Version = "3.0.0",
-                    Description = "API Documentation for Skincare Project"
-                });
-
-                options.OperationFilter<FileUploadOperationFilter>();
-
-                // Cấu hình Bearer trong Swagger
-                options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-                {
-                    In = ParameterLocation.Header,
-                    Description = "Nhập JWT Token theo định dạng: Bearer {token}",
-                    Name = "Authorization",
-                    Type = SecuritySchemeType.ApiKey,
-                    Scheme = "Bearer"
-                });
-
-                options.AddSecurityRequirement(new OpenApiSecurityRequirement
-                {
-                    {
-                        new OpenApiSecurityScheme
-                        {
-                            Reference = new OpenApiReference
-                            {
-                                Type = ReferenceType.SecurityScheme,
-                                Id = "Bearer"
-                            }
-                        },
-                        Array.Empty<string>()
-                    }
-                });
-
-                // ✅ Thêm hỗ trợ upload file trong Swagger
-            });
-
-            // ✅ Đăng ký CORS (cho phép từ frontend localhost:3000)
-            services.AddCors(options =>
-            {
-                options.AddPolicy("AllowSpecificOrigins", policy =>
-                {
-                    policy.WithOrigins(
-                            "http://localhost:3000",
-                            "http://localhost:5173",  // Vite dev server mặc định
-                            "http://localhost:5174",
-                            "http://127.0.0.1:5173",
-                            "http://127.0.0.1:5174"
-                        )
-                        .AllowAnyMethod()
-                        .AllowAnyHeader()
-                        .AllowCredentials();
-                });
-            });
-
-            services.AddAuthorization();
-
-            // Increase the request size limit for file uploads
-            services.Configure<FormOptions>(options =>
-            {
-                options.MultipartBodyLengthLimit = 10 * 1024 * 1024; // 10 MB
-            });
+            Name = "API Support",
+            Email = "support@skincare.com",
+            Url = new Uri("https://skincare.com/support")
+        },
+        License = new OpenApiLicense
+        {
+            Name = "MIT",
+            Url = new Uri("https://opensource.org/licenses/MIT")
         }
+    });
 
-        private static void ConfigureMiddleware(WebApplication app)
+    // Add JWT Authentication
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Description = "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\"",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.ApiKey,
+        Scheme = "Bearer"
+    });
+
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
         {
-            // Middleware xử lý lỗi toàn cục
-            app.UseMiddleware<ExceptionMiddleware>();
-
-            // Bật Swagger UI trong môi trường Development
-            if (app.Environment.IsDevelopment())
+            new OpenApiSecurityScheme
             {
-                app.UseSwagger();
-                app.UseSwaggerUI(c =>
+                Reference = new OpenApiReference
                 {
-                    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Skincare API v1");
-                    c.RoutePrefix = string.Empty; // Để Swagger hiển thị tại root "/"
-                });
-            }
-
-            // Serve static files - add this for local file uploads
-            app.UseStaticFiles();
-
-            // Configure static files serving
-            var uploadPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot");
-            if (!Directory.Exists(uploadPath))
-            {
-                Directory.CreateDirectory(uploadPath);
-            }
-
-            var avatarPath = Path.Combine(uploadPath, "avatar-images");
-            if (!Directory.Exists(avatarPath))
-            {
-                Directory.CreateDirectory(avatarPath);
-            }
-
-            var productPath = Path.Combine(uploadPath, "product-images");
-            if (!Directory.Exists(productPath))
-            {
-                Directory.CreateDirectory(productPath);
-            }
-
-            app.UseStaticFiles(new StaticFileOptions
-            {
-                ServeUnknownFileTypes = true,
-                OnPrepareResponse = ctx =>
-                {
-                    // Enable CORS for images
-                    ctx.Context.Response.Headers.Append("Access-Control-Allow-Origin", "*");
-                    ctx.Context.Response.Headers.Append("Access-Control-Allow-Methods", "GET");
-                    ctx.Context.Response.Headers.Append("Cache-Control", "public, max-age=600");
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
                 }
-            });
-
-            // Áp dụng CORS
-            app.UseCors("AllowSpecificOrigins");
-
-            // Add Response Caching middleware before Authentication and Authorization
-            app.UseResponseCaching();
-
-            // Middleware Authentication & Authorization
-            app.UseHttpsRedirection();
-            app.UseAuthentication();
-            app.UseAuthorization();
-
-            // Middleware chuyển hướng về Swagger nếu truy cập root
-            app.Use(async (context, next) =>
-            {
-                if (context.Request.Path == "/")
-                {
-                    context.Response.Redirect("/swagger/index.html");
-                    return;
-                }
-                await next();
-            });
-
-            // Định tuyến API
-            app.MapControllers();
+            },
+            new string[] {}
         }
+    });
+
+    // Add examples
+    options.ExampleFilters();
+
+    // Add XML comments
+    var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+    if (File.Exists(xmlPath))
+    {
+        options.IncludeXmlComments(xmlPath);
     }
+
+    // Add operation filters
+    options.OperationFilter<AddFileParamOperationFilter>();
+    options.OperationFilter<FileUploadOperationFilter>();
+
+    // Add response examples
+    options.ExampleFilters();
+
+    // Group endpoints by version
+    options.TagActionsBy(api =>
+    {
+        if (api.GroupName != null)
+        {
+            return new[] { api.GroupName.ToString() };
+        }
+
+        var controllerActionDescriptor = api.ActionDescriptor as Microsoft.AspNetCore.Mvc.Controllers.ControllerActionDescriptor;
+        if (controllerActionDescriptor != null)
+        {
+            return new[] { controllerActionDescriptor.ControllerName };
+        }
+
+        throw new InvalidOperationException("Unable to determine tag for endpoint.");
+    });
+
+    options.DocInclusionPredicate((name, api) => true);
+});
+
+// Add Swagger Examples
+builder.Services.AddSwaggerExamplesFromAssemblyOf<Program>();
+
+// Add DbContext
+builder.Services.AddDbContext<SWP391Context>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// Add CORS
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
+});
+
+// Add SignalR for real-time notifications
+builder.Services.AddSignalR(options =>
+{
+    options.EnableDetailedErrors = true;
+    options.MaximumReceiveMessageSize = 102400; // 100KB
+    options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
+    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+});
+
+// Add custom services
+builder.Services.AddServices();
+
+// Add custom rate limiting
+builder.Services.AddCustomRateLimiting(builder.Configuration);
+
+// Add API versioning
+builder.Services.AddApiVersioning(options =>
+{
+    options.DefaultApiVersion = new Microsoft.AspNetCore.Mvc.ApiVersion(1, 0);
+    options.AssumeDefaultVersionWhenUnspecified = true;
+    options.ReportApiVersions = true;
+});
+
+builder.Services.AddVersionedApiExplorer(options =>
+{
+    options.GroupNameFormat = "'v'VVV";
+    options.SubstituteApiVersionInUrl = true;
+});
+
+// Add Health Checks
+builder.Services.AddHealthChecks()
+    .AddCheck<DatabaseHealthCheck>("Database")
+    .AddCheck<RedisHealthCheck>("Redis")
+    .AddCheck<SystemHealthCheck>("System")
+    .AddCheck<ResponseTimeHealthCheck>("ResponseTime");
+
+// Configure Serilog
+builder.Host.UseSerilog((context, services, configuration) => configuration
+    .ReadFrom.Configuration(context.Configuration)
+    .ReadFrom.Services(services)
+    .Enrich.FromLogContext()
+    .WriteTo.Console()
+    .WriteTo.File("logs/skincare-api-.log", rollingInterval: RollingInterval.Day));
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "Skincare Store API v1");
+        options.SwaggerEndpoint("/swagger/v2/swagger.json", "Skincare Store API v2");
+        options.RoutePrefix = "swagger";
+        options.DocumentTitle = "Skincare Store API Documentation";
+        options.DefaultModelsExpandDepth(-1);
+        options.DisplayRequestDuration();
+        options.EnableDeepLinking();
+        options.EnableFilter();
+        options.ShowExtensions();
+        options.ShowCommonExtensions();
+        options.EnableValidator();
+        options.EnableTryItOutByDefault();
+        options.DisplayOperationId();
+        options.InjectStylesheet("/swagger-ui/custom.css");
+        options.InjectJavascript("/swagger-ui/custom.js");
+    });
 }
+
+app.UseHttpsRedirection();
+
+// Use CORS
+app.UseCors("AllowAll");
+
+// Use custom middleware
+app.UseCorrelationId();
+app.UseGlobalExceptionHandler();
+app.UseResponseTimeTracking();
+
+// Use API standardization middleware
+app.UseApiStandardization();
+
+// Use rate limiting
+app.UseRateLimiter();
+
+// Use authentication and authorization
+app.UseAuthentication();
+app.UseAuthorization();
+
+// Map controllers
+app.MapControllers();
+
+// Map health checks
+app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+        var response = new
+        {
+            status = report.Status.ToString(),
+            checks = report.Entries.Select(x => new
+            {
+                name = x.Key,
+                status = x.Value.Status.ToString(),
+                description = x.Value.Description,
+                duration = x.Value.Duration.ToString()
+            })
+        };
+        await context.Response.WriteAsJsonAsync(response);
+    }
+});
+
+app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready")
+});
+
+app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = _ => false
+});
+
+// Map SignalR hub
+app.MapHub<NotificationHub>("/notificationHub");
+
+app.Run();

@@ -6,6 +6,7 @@ using Skincare.Services.Interfaces;
 using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Skincare.API.Controllers
 {
@@ -23,6 +24,7 @@ namespace Skincare.API.Controllers
         }
 
         [HttpPost("register")]
+        [EnableRateLimiting("AuthPolicy")]
         public async Task<IActionResult> Register([FromBody] RegisterRequest request)
         {
             if (!ModelState.IsValid)
@@ -54,6 +56,7 @@ namespace Skincare.API.Controllers
         }
 
         [HttpPost("login")]
+        [EnableRateLimiting("AuthPolicy")]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
             if (!ModelState.IsValid)
@@ -77,14 +80,53 @@ namespace Skincare.API.Controllers
             }
         }
 
-        [HttpPost("logout")]
-        public IActionResult Logout()
+        [HttpPost("refresh-token")]
+        [EnableRateLimiting("AuthPolicy")]
+        public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
         {
-            // Với JWT (stateless), logout = client xóa token
-            return Ok(new { message = "Logged out successfully." });
+            if (!ModelState.IsValid)
+                return BadRequest(new { message = "Invalid request data", errors = ModelState });
+
+            try
+            {
+                var response = await _authenticationService.RefreshTokenAsync(request.RefreshToken);
+                if (response == null)
+                {
+                    return Unauthorized(new { message = "Invalid refresh token." });
+                }
+
+                return Ok(new { message = "Token refreshed successfully", data = response });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during token refresh");
+                return StatusCode(500, new { message = "Internal server error", details = ex.Message });
+            }
+        }
+
+        [HttpPost("logout")]
+        public async Task<IActionResult> Logout()
+        {
+            try
+            {
+                // Get the current user's ID from the token
+                var userId = User.FindFirst("UserId")?.Value;
+                if (!string.IsNullOrEmpty(userId))
+                {
+                    await _authenticationService.RevokeRefreshTokenAsync(int.Parse(userId));
+                }
+                
+                return Ok(new { message = "Logged out successfully." });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during logout");
+                return StatusCode(500, new { message = "Internal server error", details = ex.Message });
+            }
         }
 
         [HttpPost("register-with-avatar")]
+        [EnableRateLimiting("UploadPolicy")]
         public async Task<IActionResult> RegisterWithAvatar(
             [FromForm] string username, 
             [FromForm] string email, 
